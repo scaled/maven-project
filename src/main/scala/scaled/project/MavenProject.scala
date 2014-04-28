@@ -19,8 +19,8 @@ object MavenProject {
 
   @Plugin(tag="project-finder")
   class FinderPlugin extends ProjectFinderPlugin("maven", true) {
-    // TODO: inspect the POM, decide if it references a local parent POM, return 1 if it doesn't
-    def checkRoot (root :File) :Int = if (new File(root, "pom.xml").exists()) 0 else -1
+    // TODO: figure out how we'll make life easier in multi-module projects
+    def checkRoot (root :File) :Int = if (new File(root, "pom.xml").exists()) 1 else -1
     def createProject (root :File) :Project = new MavenProject(root)
   }
 }
