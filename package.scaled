@@ -1,0 +1,8 @@
+   name: maven-project
+version: 1.0
+descrip: Provides Maven project supprot for Scaled.
+ weburl: https://github.com/scaled/maven-project
+ srcurl: git:https://github.com/scaled/maven-project.git
+license: New BSD
+ srcdir: src/main/scala
+ bindir: target/classes
