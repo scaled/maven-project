@@ -9,7 +9,7 @@ import pomutil.{DependResolver, Dependency, POM}
 import reactual.Future
 import scaled._
 
-class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService)
+class MavenProject (root :File, log :Logger, exec :Executor, projectSvc :ProjectService)
     extends FileProject(root) {
 
   private[this] val pomFile = new File(root, "pom.xml")
@@ -22,7 +22,9 @@ class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService
   override def id = Some(pom.id)
   override def sourceURL = pom.scm.connection.map(stripSCM)
 
-  override protected def createCompiler () = Some(new MavenCompiler())
+  // TODO: figure out what kind of compiler we should use based on what?
+  //       plugins in POM, source files, chicken sacrifice?
+  override protected def createCompiler () = Some(new ScalaCompiler(this, exec, log))
   override protected def ignores = MavenProject.mavenIgnores
 
   def sourceDirs :Seq[File] = Seq(buildDir("sourceDirectory", "src/main"))
@@ -31,13 +33,13 @@ class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService
   def outputDir :File = buildDir("outputDirectory", "target/classes")
   def testOutputDir :File = buildDir("testOutputDirectory", "target/test-classes")
 
+  def buildClasspath :Seq[File] = outputDir +: classpath(transitiveDepends(false))
+  def testClasspath :Seq[File] = testOutputDir +: classpath(transitiveDepends(true))
+
   private def file (root :File, comps :String*) :File = (root /: comps)(new File(_, _))
 
   private def buildDir (key :String, defpath :String) :File =
     file(root, pom.buildProps.getOrElse(key, defpath).split("/") :_*)
-
-  protected def buildClasspath :Seq[File] = outputDir +: classpath(transitiveDepends(false))
-  protected def testClasspath :Seq[File] = testOutputDir +: classpath(transitiveDepends(true))
 
   protected def transitiveDepends (forTest :Boolean) :Seq[Dependency] = new DependResolver(pom) {
     // TODO: check whether this dependency is known to Scaled, and use the known version instead
@@ -56,55 +58,8 @@ class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService
         Some(proj.outputDir)
       case _ =>
         val m2file = dep.localArtifact
-        if (!m2file.isDefined) metaSvc.log(s"MavenProject($root) unable to resolve jar for $dep")
+        if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
         m2file
-    }
-  }
-
-  protected class MavenCompiler extends Compiler {
-    import com.typesafe.zinc._
-
-    val logger = new sbt.Logger {
-      def trace (t : =>Throwable): Unit = metaSvc.log("trace", t)
-      def success (message : =>String): Unit = metaSvc.log(message)
-      def log (level :sbt.Level.Value, message : =>String): Unit = metaSvc.log(message)
-    }
-
-    val settings = Settings(
-      // help: Boolean              = false,
-      // version: Boolean           = false,
-      // quiet: Boolean             = false,
-      // logLevel: Level.Value      = Level.Info,
-      color             = false,
-      // sources: Seq[File]         = Seq.empty, // TODO: find all scala sources in sourceDirs
-      classpath       = buildClasspath, // TODO: how/when to compile for tests
-      classesDirectory = outputDir
-      // scala: ScalaLocation       = ScalaLocation(),
-      // scalacOptions: Seq[String] = Seq.empty,
-      // javaHome: Option[File]     = None,
-      // forkJava: Boolean          = false,
-      // javaOnly: Boolean          = false,
-      // javacOptions: Seq[String]  = Seq.empty,
-      // compileOrder: CompileOrder = CompileOrder.Mixed,
-      // sbt: SbtJars               = SbtJars(),
-      // incOptions: IncOptions     = IncOptions(),
-      // analysis: AnalysisOptions  = AnalysisOptions(),
-      // analysisUtil: AnalysisUtil = AnalysisUtil(),
-      // properties: Seq[String]    = Seq.empty
-    )
-    val zincSetup = Setup(settings)
-    val compiler = Compiler(zincSetup, logger)
-
-    def compile () = {
-      val inputs = Inputs(settings)
-      val vinputs = Inputs.verify(inputs)
-      val cwd = Some(root)
-      compiler.compile(vinputs, cwd)(logger)
-      Future.success(Seq()) // TODO
-    }
-
-    def shutdown () {
-      // TODO
     }
   }
 

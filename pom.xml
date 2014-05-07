@@ -24,12 +24,6 @@
       <version>0.7-SNAPSHOT</version>
     </dependency>
 
-    <dependency>
-      <groupId>com.typesafe.zinc</groupId>
-      <artifactId>zinc</artifactId>
-      <version>0.3.5-M3</version>
-    </dependency>
-
     <!-- test dependencies -->
     <dependency>
       <groupId>junit</groupId>
