@@ -24,14 +24,13 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
   expecter.send(s"classpath ${proj.buildClasspath.map(_.getAbsolutePath).mkString("\t")}")
 
   def compile (buffer :Buffer) = {
-    val result = Promise[String]()
+    val result = Promise[Boolean]()
     val cmds = Seq("compile") ++ proj.sourceDirs.map(_.getAbsolutePath)
-    var last = ""
     expecter.interact(Seq(cmds.mkString(" "))) { (line, isErr) =>
       line match {
-        case "compile success" => result.succeed(last) ; true
-        case "compile failure" => result.succeed(last) ; true
-        case _ => last = line ; buffer.append(Line.fromText(line) :+ Line.Empty) ; false
+        case "compile success" => result.succeed(true) ; true
+        case "compile failure" => result.succeed(false) ; true
+        case _ => buffer.append(Line.fromTextNL(line)) ; false
       }
     }
     result
@@ -66,7 +65,7 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
 object ScalaCompiler {
 
   // matches: "/foo/bar/baz.scala:NN: some error message"
-  val pathM = Matcher.regexp("""(\S+):(\d+):(.*)""")
+  val pathM = Matcher.regexp("""^(\S+):(\d+):(.*)""")
   // matches: "     ^"
-  val caretM = Matcher.regexp("""(\s*)\^""")
+  val caretM = Matcher.regexp("""^(\s*)\^""")
 }
