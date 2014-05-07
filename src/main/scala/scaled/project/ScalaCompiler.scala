@@ -31,7 +31,7 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
       line match {
         case "compile success" => result.succeed(last) ; true
         case "compile failure" => result.succeed(last) ; true
-        case _ => last = line ; buffer.append(Line.fromText(line + System.lineSeparator)) ; false
+        case _ => last = line ; buffer.append(Line.fromText(line) :+ Line.Empty) ; false
       }
     }
     result
@@ -43,13 +43,13 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
       case ploc => try {
         val file = pathM.group(1)
         val line = pathM.group(2).toInt
-        val errPre = pathM.group(3)
+        val errPre = pathM.group(3).trim
         val pnext = ploc.nextStart
         // now search for the caret that indicates the error column
         buffer.findForward(caretM, pnext) match {
           case Loc.None => Some(Error(file, Loc(line-1, 0), errPre) -> pnext)
           case cloc =>
-            val desc = errPre + System.lineSeparator + Line.toText(buffer.region(pnext, cloc.atCol(0)))
+            val desc = Line.toText(new Line(errPre) +: buffer.region(pnext, cloc.atCol(0)))
             Some(Error(file, Loc(line-1, cloc.col), desc) -> cloc.nextStart)
         }
       } catch {
@@ -68,5 +68,5 @@ object ScalaCompiler {
   // matches: "/foo/bar/baz.scala:NN: some error message"
   val pathM = Matcher.regexp("""(\S+):(\d+):(.*)""")
   // matches: "     ^"
-  val caretM = Matcher.regexp("""(\s*)^""")
+  val caretM = Matcher.regexp("""(\s*)\^""")
 }
