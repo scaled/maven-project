@@ -48,7 +48,7 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
         buffer.findForward(caretM, pnext) match {
           case Loc.None => Some(Error(file, Loc(line-1, 0), errPre) -> pnext)
           case cloc =>
-            val desc = Line.toText(new Line(errPre) +: buffer.region(pnext, cloc.atCol(0)))
+            val desc = Line.toText(Line(errPre) +: buffer.region(pnext, cloc.atCol(0)))
             Some(Error(file, Loc(line-1, cloc.col), desc) -> cloc.nextStart)
         }
       } catch {
