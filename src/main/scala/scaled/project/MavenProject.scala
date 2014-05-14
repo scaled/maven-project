@@ -24,7 +24,7 @@ class MavenProject (root :File, log :Logger, exec :Executor, projectSvc :Project
 
   // TODO: figure out what kind of compiler we should use based on what?
   //       plugins in POM, source files, chicken sacrifice?
-  override protected def createCompiler () = Some(new ScalaCompiler(this, exec, log))
+  override protected def createCompiler () = new ScalaCompiler(this, exec, log)
   override protected def ignores = MavenProject.mavenIgnores
 
   def sourceDirs :Seq[File] = Seq(buildDir("sourceDirectory", "src/main"))

@@ -10,7 +10,7 @@ import scala.collection.mutable.ArrayBuffer
 import scaled._
 import scaled.util.Expecter
 
-class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Compiler {
+class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Compiler(proj) {
   import Compiler._
   import ScalaCompiler._
 
@@ -23,7 +23,11 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
   expecter.send(s"output ${proj.outputDir.getAbsolutePath}")
   expecter.send(s"classpath ${proj.buildClasspath.map(_.getAbsolutePath).mkString("\t")}")
 
-  def compile (buffer :Buffer) = {
+  def shutdown () {
+    expecter.close()
+  }
+
+  protected def compile (buffer :Buffer) = {
     val result = Promise[Boolean]()
     val cmds = Seq("compile") ++ proj.sourceDirs.map(_.getAbsolutePath)
     expecter.interact(Seq(cmds.mkString(" "))) { (line, isErr) =>
@@ -36,7 +40,7 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
     result
   }
 
-  def nextError (buffer :Buffer, start :Loc) = {
+  protected def nextError (buffer :Buffer, start :Loc) = {
     buffer.findForward(pathM, start) match {
       case Loc.None => None
       case ploc => try {
@@ -55,10 +59,6 @@ class ScalaCompiler (proj :MavenProject, exec :Executor, log :Logger) extends Co
         case e :Exception => log.log("Error parsing error buffer", e) ; None
       }
     }
-  }
-
-  def shutdown () {
-    expecter.close()
   }
 }
 
