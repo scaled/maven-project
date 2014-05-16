@@ -29,6 +29,11 @@ class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService
     def buildClasspath = MavenProject.this.buildClasspath
     def outputDir = MavenProject.this.outputDir
   }
+
+  override protected def createRunner () = new JavaRunner(this) {
+    override def execClasspath = buildClasspath // TODO
+  }
+
   override protected def ignores = MavenProject.mavenIgnores
 
   def sourceDirs :Seq[File] = Seq(buildDir("sourceDirectory", "src/main"))
