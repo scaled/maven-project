@@ -24,7 +24,11 @@ class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService
 
   // TODO: figure out what kind of compiler we should use based on what?
   //       plugins in POM, source files, chicken sacrifice?
-  override protected def createCompiler () = new ScalaCompiler(this, metaSvc.exec, log)
+  override protected def createCompiler () = new ScalaCompiler(this) {
+    def sourceDirs = MavenProject.this.sourceDirs
+    def buildClasspath = MavenProject.this.buildClasspath
+    def outputDir = MavenProject.this.outputDir
+  }
   override protected def ignores = MavenProject.mavenIgnores
 
   def sourceDirs :Seq[File] = Seq(buildDir("sourceDirectory", "src/main"))
