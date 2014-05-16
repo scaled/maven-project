@@ -19,6 +19,17 @@
     </dependency>
 
     <dependency>
+      <groupId>com.samskivert.scaled</groupId>
+      <artifactId>java-project</artifactId>
+      <version>1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>com.samskivert.scaled</groupId>
+      <artifactId>scala-project</artifactId>
+      <version>1.0-SNAPSHOT</version>
+    </dependency>
+
+    <dependency>
       <groupId>com.samskivert</groupId>
       <artifactId>pom-util</artifactId>
       <version>0.7-SNAPSHOT</version>

@@ -7,5 +7,6 @@ license: New BSD
  srcdir: src/main/scala
  bindir: target/classes
  depend: git:https://github.com/scaled/project-service.git
+ depend: git:https://github.com/scaled/java-project.git
+ depend: git:https://github.com/scaled/scala-project.git
  depend: mvn:com.samskivert:pom-util:0.7-SNAPSHOT
- depend: mvn:com.samskivert.scaled:scala-compiler:1.0-SNAPSHOT
