@@ -9,8 +9,9 @@ import pomutil.{DependResolver, Dependency, POM}
 import reactual.Future
 import scaled._
 
-class MavenProject (root :File, log :Logger, exec :Executor, projectSvc :ProjectService)
-    extends FileProject(root) {
+class MavenProject (
+  root :File, log :Logger, exec :Executor, metaSvc :MetaService, projectSvc :ProjectService
+) extends FileProject(root, log, metaSvc) {
 
   private[this] val pomFile = new File(root, "pom.xml")
   // TODO: reload the POM if it changes? restart the compiler if so...
