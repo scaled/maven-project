@@ -4,17 +4,17 @@
 
 package scaled.project
 
-import java.io.File
+import java.nio.file.Path
 import pomutil.{DependResolver, Dependency, POM}
 import reactual.Future
 import scaled._
 
-class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService)
+class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService)
     extends FileProject(root, metaSvc) {
 
-  private[this] val pomFile = new File(root, "pom.xml")
+  private[this] val pomFile = root.resolve("pom.xml")
   // TODO: reload the POM if it changes? restart the compiler if so...
-  private[this] var pom = POM.fromFile(pomFile) getOrElse {
+  private[this] var pom = POM.fromFile(pomFile.toFile) getOrElse {
     throw new IllegalArgumentException("Unable to load $pomFile")
   }
 
@@ -36,30 +36,28 @@ class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService
 
   override protected def ignores = MavenProject.mavenIgnores
 
-  def sourceDirs :Seq[File] = Seq(buildDir("sourceDirectory", "src/main"))
-  def testSourceDirs :Seq[File] = Seq(buildDir("testSourceDirectory", "src/test"))
+  def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
+  def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
 
-  def outputDir :File = buildDir("outputDirectory", "target/classes")
-  def testOutputDir :File = buildDir("testOutputDirectory", "target/test-classes")
+  def outputDir :Path = buildDir("outputDirectory", "target/classes")
+  def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
 
-  def buildClasspath :Seq[File] = outputDir +: classpath(transitiveDepends(false))
-  def testClasspath :Seq[File] = testOutputDir +: classpath(transitiveDepends(true))
+  def buildClasspath :Seq[Path] = outputDir +: classpath(transitiveDepends(false))
+  def testClasspath :Seq[Path] = testOutputDir +: classpath(transitiveDepends(true))
 
-  private def file (root :File, comps :String*) :File = (root /: comps)(new File(_, _))
-
-  private def buildDir (key :String, defpath :String) :File =
-    file(root, pom.buildProps.getOrElse(key, defpath).split("/") :_*)
+  private def buildDir (key :String, defpath :String) :Path =
+    root.resolve(pom.buildProps.getOrElse(key, defpath))
 
   protected def transitiveDepends (forTest :Boolean) :Seq[Dependency] = new DependResolver(pom) {
     // TODO: check whether this dependency is known to Scaled, and use the known version instead
     // of the default (which looks in ~/.m2 for an installed POM)
     override def localDep (dep :Dependency) = (for {
       proj <- projectSvc.projectForId(dep.id)
-      pom  <- POM.fromFile(new File(proj.root, "pom.xml"))
+      pom  <- POM.fromFile(proj.root.resolve("pom.xml").toFile)
     } yield pom) orElse super.localDep(dep)
   }.resolve(forTest)
 
-  protected def classpath (deps :Seq[Dependency]) :Seq[File] = deps flatMap { dep =>
+  protected def classpath (deps :Seq[Dependency]) :Seq[Path] = deps flatMap { dep =>
     projectSvc.projectForId(dep.id) match {
       case Some(proj :MavenProject) =>
         // TODO: have JavaProject which reports outputDir, so that we can interoperate
@@ -68,7 +66,7 @@ class MavenProject (root :File, metaSvc :MetaService, projectSvc :ProjectService
       case _ =>
         val m2file = dep.localArtifact
         if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
-        m2file
+        m2file.map(_.toPath)
     }
   }
 
@@ -82,6 +80,6 @@ object MavenProject {
 
   @Plugin(tag="project-finder")
   class FinderPlugin extends ProjectFinderPlugin("maven", true, classOf[MavenProject]) {
-    def checkRoot (root :File) :Int = if (new File(root, "pom.xml").exists()) 1 else -1
+    def checkRoot (root :Path) :Int = if (exists(root, "pom.xml")) 1 else -1
   }
 }
