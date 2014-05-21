@@ -8,6 +8,7 @@ import java.nio.file.Path
 import pomutil.{DependResolver, Dependency, POM}
 import reactual.Future
 import scaled._
+import scaled.util.BufferBuilder
 
 class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService)
     extends FileProject(root, metaSvc) {
@@ -35,6 +36,22 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
   }
 
   override protected def ignores = MavenProject.mavenIgnores
+
+  override def describeSelf (bb :BufferBuilder) {
+    super.describeSelf(bb)
+
+    bb.addSubHeader("Maven Info")
+    bb.addSection("Source dirs:")
+    bb.addKeysValues("compile: " -> sourceDirs.mkString(" "),
+                     "test: "    -> testSourceDirs.mkString(" "))
+    bb.addSection("Output dirs:")
+    bb.addKeysValues("compile: " -> outputDir.toString,
+                     "test: "    -> testOutputDir.toString)
+    bb.addSection("Compile classpath:")
+    buildClasspath foreach { p => bb.add(p.toString) }
+    bb.addSection("Test classpath:")
+    testClasspath foreach { p => bb.add(p.toString) }
+  }
 
   def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
   def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
