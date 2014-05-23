@@ -19,10 +19,24 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
   import scala.collection.convert.WrapAsScala._
 
   private[this] val pomFile = root.resolve("pom.xml")
-  // TODO: reload the POM if it changes? restart the compiler if so...
   private[this] var pom = POM.fromFile(pomFile.toFile) getOrElse {
     throw new IllegalArgumentException("Unable to load $pomFile")
   }
+
+  // watch the POM file for changes, if it does change, hibernate which will cause is to reload
+  // everything when we're next referenced
+  metaSvc.service[WatchService].watchFile(pomFile, file => {
+    POM.fromFile(file.toFile) match {
+      case None =>
+        metaSvc.log.log(s"$name: auto-reload failed: $file")
+      case Some(pom) =>
+        metaSvc.log.log(s"$name: auto-reloded: $file")
+        hibernate()
+        this.pom = pom
+    }
+  })
+  // note that we don't 'close' our watch, we'll keep it active for the lifetime of the editor
+  // because it's low overhead; I may change my mind on this front later, hence this note
 
   override def name = pom.artifactId
   override def id = Some(pom.id)
