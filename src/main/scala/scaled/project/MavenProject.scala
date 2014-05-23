@@ -5,6 +5,7 @@
 package scaled.project
 
 import com.google.common.collect.{Multiset, HashMultiset}
+import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, FileVisitResult, Path, SimpleFileVisitor}
 import pomutil.{DependResolver, Dependency, POM}
@@ -50,10 +51,13 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
   }
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
-  override protected def createCompiler () = new ScalaCompiler(this) {
+  override protected def createCompiler () = new ScalaCompiler(metaSvc, this) {
     def sourceDirs = MavenProject.this.sourceDirs
     def buildClasspath = MavenProject.this.buildClasspath
     def outputDir = MavenProject.this.outputDir
+    def testSourceDirs = MavenProject.this.testSourceDirs
+    def testClasspath = MavenProject.this.testClasspath
+    def testOutputDir = MavenProject.this.testOutputDir
   }
 
   override protected def createRunner () = new JavaRunner(this) {
@@ -64,7 +68,7 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
 
   def summarizeSources :Multiset[String] = {
     val counts = HashMultiset.create[String](2)
-    sourceDirs foreach { dir =>
+    allSourceDirs.filter(Files.exists(_)) foreach { dir =>
       // TODO: should we be following symlinks? likely so...
       Files.walkFileTree(dir, new SimpleFileVisitor[Path]() {
         override def visitFile (file :Path, attrs :BasicFileAttributes) = {
@@ -82,12 +86,13 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
 
   def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
   def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
+  def allSourceDirs = sourceDirs ++ testSourceDirs
 
   def outputDir :Path = buildDir("outputDirectory", "target/classes")
   def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
 
   def buildClasspath :Seq[Path] = outputDir +: classpath(transitiveDepends(false))
-  def testClasspath :Seq[Path] = testOutputDir +: classpath(transitiveDepends(true))
+  def testClasspath :Seq[Path] = testOutputDir +: outputDir +: classpath(transitiveDepends(true))
 
   private def buildDir (key :String, defpath :String) :Path =
     root.resolve(pom.buildProps.getOrElse(key, defpath))
@@ -108,7 +113,7 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
         // with non-MavenProjects?
         Some(proj.outputDir)
       case _ =>
-        val m2file = dep.localArtifact
+        val m2file = dep.localArtifact orElse dep.systemPath.map(new File(_))
         if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
         m2file.map(_.toPath)
     }
