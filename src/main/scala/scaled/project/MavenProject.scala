@@ -66,12 +66,18 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
   override protected def createCompiler () = new ScalaCompiler(metaSvc, this) {
-    def sourceDirs = MavenProject.this.sourceDirs
-    def buildClasspath = MavenProject.this.buildClasspath
-    def outputDir = MavenProject.this.outputDir
-    def testSourceDirs = MavenProject.this.testSourceDirs
-    def testClasspath = MavenProject.this.testClasspath
-    def testOutputDir = MavenProject.this.testOutputDir
+    override def sourceDirs = MavenProject.this.sourceDirs
+    override def buildClasspath = MavenProject.this.buildClasspath
+    override def outputDir = MavenProject.this.outputDir
+    override def testSourceDirs = MavenProject.this.testSourceDirs
+    override def testClasspath = MavenProject.this.testClasspath
+    override def testOutputDir = MavenProject.this.testOutputDir
+  }
+
+  // TODO: how to determine what kind of tester to use?
+  override protected def createTester () :Tester = new JUnitTester(this) {
+    override def testOutputDir = MavenProject.this.testOutputDir
+    override def testClasspath = MavenProject.this.testClasspath
   }
 
   override protected def createRunner () = new JavaRunner(this) {
