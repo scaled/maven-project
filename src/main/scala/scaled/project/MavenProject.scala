@@ -76,6 +76,7 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
 
   // TODO: how to determine what kind of tester to use?
   override protected def createTester () :Tester = new JUnitTester(this) {
+    override def testSourceDirs = MavenProject.this.testSourceDirs
     override def testOutputDir = MavenProject.this.testOutputDir
     override def testClasspath = MavenProject.this.testClasspath
   }
