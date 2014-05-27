@@ -85,6 +85,30 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     override def execClasspath = buildClasspath // TODO
   }
 
+  override protected def createCodex () = new JavaCodex() {
+    // TODO: should each JavaCodex have a build and test byteCodex? probably...
+    override val byteCodex = ByteCodex.forDir(pom.id, outputDir)
+
+    override def depends = List() ++ transitiveDepends(false) flatMap { dep =>
+      projectSvc.projectForId(dep.id) match {
+        case Some(proj) if (proj.codex.isInstanceOf[JavaCodex]) =>
+          Some(proj.codex.asInstanceOf[JavaCodex])
+        case _ =>
+          // TODO: cache these somewhere central, reference count them? they're big!
+          codexForDepend(dep)
+      }
+    }
+  }
+
+  private def codexForDepend (dep :Dependency) :Option[JavaCodex] = {
+    val m2file = dep.localArtifact orElse dep.systemPath.map(new File(_))
+    if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
+    m2file.map(f => new JavaCodex() {
+      override val byteCodex = ByteCodex.forJar(dep.id, f.toPath)
+      override def depends = Nil
+    })
+  }
+
   override protected def ignores = MavenProject.mavenIgnores
 
   def summarizeSources :Multiset[String] = {
@@ -119,8 +143,8 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     root.resolve(pom.buildProps.getOrElse(key, defpath))
 
   protected def transitiveDepends (forTest :Boolean) :Seq[Dependency] = new DependResolver(pom) {
-    // TODO: check whether this dependency is known to Scaled, and use the known version instead
-    // of the default (which looks in ~/.m2 for an installed POM)
+    // check whether this dependency is known to Scaled, and use the known version instead of the
+    // default (which looks in ~/.m2 for an installed POM)
     override def localDep (dep :Dependency) = (for {
       proj <- projectSvc.projectForId(dep.id)
       pom  <- POM.fromFile(proj.root.resolve("pom.xml").toFile)
