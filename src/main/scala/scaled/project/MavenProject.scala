@@ -87,9 +87,9 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
 
   override protected def createCodex () = new JavaCodex() {
     // TODO: should each JavaCodex have a build and test byteCodex? probably...
-    override val byteCodex = ByteCodex.forDir(pom.id, outputDir)
+    override def createByteCodex = ByteCodex.forDir(pom.id, outputDir)
 
-    override def depends = List() ++ transitiveDepends(false) flatMap { dep =>
+    override def computeDepends = List() ++ transitiveDepends(false) flatMap { dep =>
       projectSvc.projectForId(dep.id) match {
         case Some(proj) if (proj.codex.isInstanceOf[JavaCodex]) =>
           Some(proj.codex.asInstanceOf[JavaCodex])
@@ -104,8 +104,8 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     val m2file = dep.localArtifact orElse dep.systemPath.map(new File(_))
     if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
     m2file.map(f => new JavaCodex() {
-      override val byteCodex = ByteCodex.forJar(dep.id, f.toPath)
-      override def depends = Nil
+      override def createByteCodex = ByteCodex.forJar(dep.id, f.toPath)
+      override def computeDepends = Nil
     })
   }
 
