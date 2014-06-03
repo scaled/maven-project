@@ -17,6 +17,7 @@ import scaled.util.BufferBuilder
 class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService)
     extends FileProject(root, metaSvc) {
   import scala.collection.convert.WrapAsScala._
+  import Project._
 
   private[this] val pomFile = root.resolve("pom.xml")
   private[this] var pom = POM.fromFile(pomFile.toFile) getOrElse {
@@ -39,8 +40,11 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
   // because it's low overhead; I may change my mind on this front later, hence this note
 
   override def name = pom.artifactId
-  override def id = Some(pom.id)
-  override def sourceURL = pom.scm.connection.map(stripSCM)
+  override def id = Some(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version))
+  override def sourceURL = pom.scm.connection.map(stripSCM).flatMap(srcURLFromString)
+  override def depends = transitiveDepends(false) map { dep =>
+    RepoDepend(RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version))
+  }
 
   override def describeSelf (bb :BufferBuilder) {
     super.describeSelf(bb)
@@ -85,30 +89,6 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     override def execClasspath = buildClasspath // TODO
   }
 
-  override protected def createCodex () = new JavaCodex() {
-    // TODO: should each JavaCodex have a build and test byteCodex? probably...
-    override def createByteCodex = ByteCodex.forDir(pom.id, outputDir)
-
-    override def computeDepends = List() ++ transitiveDepends(false) flatMap { dep =>
-      projectSvc.projectForId(dep.id) match {
-        case Some(proj) if (proj.codex.isInstanceOf[JavaCodex]) =>
-          Some(proj.codex.asInstanceOf[JavaCodex])
-        case _ =>
-          // TODO: cache these somewhere central, reference count them? they're big!
-          codexForDepend(dep)
-      }
-    }
-  }
-
-  private def codexForDepend (dep :Dependency) :Option[JavaCodex] = {
-    val m2file = dep.localArtifact orElse dep.systemPath.map(new File(_))
-    if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
-    m2file.map(f => new JavaCodex() {
-      override def createByteCodex = ByteCodex.forJar(dep.id, f.toPath)
-      override def computeDepends = Nil
-    })
-  }
-
   override protected def ignores = MavenProject.mavenIgnores
 
   def summarizeSources :Multiset[String] = {
@@ -146,13 +126,13 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     // check whether this dependency is known to Scaled, and use the known version instead of the
     // default (which looks in ~/.m2 for an installed POM)
     override def localDep (dep :Dependency) = (for {
-      proj <- projectSvc.projectForId(dep.id)
+      proj <- projectSvc.projectFor(toDepend(dep))
       pom  <- POM.fromFile(proj.root.resolve("pom.xml").toFile)
     } yield pom) orElse super.localDep(dep)
   }.resolve(forTest)
 
   protected def classpath (deps :Seq[Dependency]) :Seq[Path] = deps flatMap { dep =>
-    projectSvc.projectForId(dep.id) match {
+    projectSvc.projectFor(toDepend(dep)) match {
       case Some(proj :MavenProject) =>
         // TODO: have JavaProject which reports outputDir, so that we can interoperate
         // with non-MavenProjects?
@@ -164,6 +144,8 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     }
   }
 
+  private def toDepend (dep :Dependency) =
+    RepoDepend(RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version))
   private def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
 }
 
