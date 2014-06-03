@@ -4,7 +4,10 @@
 
 package scaled.project
 
-import com.google.common.collect.{Multiset, HashMultiset}
+import codex.extract.JavaExtractor
+import codex.store.EphemeralStore
+import codex.store.ProjectStore
+import com.google.common.collect.{Multimap, HashMultimap}
 import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, FileVisitResult, Path, SimpleFileVisitor}
@@ -53,11 +56,11 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     bb.addSection("Source dirs:")
     bb.addKeysValues("compile: " -> sourceDirs.mkString(" "),
                      "test: "    -> testSourceDirs.mkString(" "))
-    val srcsum = summarizeSources
+    val srcsum = summarizeSources(true)
     if (!srcsum.isEmpty) {
       bb.addSection("Source files:")
-      bb.addKeysValues(srcsum.entrySet.map(
-        e => (s"${e.getElement}: ", e.getCount.toString)).toSeq :_*)
+      bb.addKeysValues(srcsum.asMap.entrySet.map(
+        e => (s".${e.getKey}: ", e.getValue.size.toString)).toSeq :_*)
     }
     bb.addSection("Output dirs:")
     bb.addKeysValues("compile: " -> outputDir.toString,
@@ -91,22 +94,41 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
 
   override protected def ignores = MavenProject.mavenIgnores
 
-  def summarizeSources :Multiset[String] = {
-    val counts = HashMultiset.create[String](2)
-    allSourceDirs.filter(Files.exists(_)) foreach { dir =>
+  // TEMP: for now auto-populate project store the first time we're loaded
+  override protected def createProjectStore () :ProjectStore = {
+    import scala.collection.convert.WrapAsJava._
+    val store = super.createProjectStore().asInstanceOf[EphemeralStore]
+    val javas = summarizeSources(false).get("java")
+    if (!javas.isEmpty) {
+      new JavaExtractor() {
+        override def classpath = buildClasspath
+      }.process(javas, store.writer)
+    }
+    store
+  }
+
+  def summarizeSources (includeTest :Boolean) :Multimap[String,Path] = {
+    val bySuff = HashMultimap.create[String,Path]()
+    onSources(includeTest) { file =>
+      val fname = file.getFileName.toString
+      fname.lastIndexOf(".") match {
+        case -1 => // skip it!
+        case ii => bySuff.put(fname.substring(ii+1), file)
+      }
+    }
+    bySuff
+  }
+
+  private def onSources (includeTest :Boolean)(fn :Path => Unit) {
+    (if (includeTest) allSourceDirs else sourceDirs).filter(Files.exists(_)) foreach { dir =>
       // TODO: should we be following symlinks? likely so...
       Files.walkFileTree(dir, new SimpleFileVisitor[Path]() {
         override def visitFile (file :Path, attrs :BasicFileAttributes) = {
-          if (!attrs.isDirectory) {
-            val fname = file.getFileName.toString
-            if (fname endsWith ".java") counts.add(".java")
-            else if (fname endsWith ".scala") counts.add(".scala")
-          }
+          if (!attrs.isDirectory) fn(file)
           FileVisitResult.CONTINUE
         }
       })
     }
-    counts
   }
 
   def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
