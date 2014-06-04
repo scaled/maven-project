@@ -5,8 +5,7 @@
 package scaled.project
 
 import codex.extract.JavaExtractor
-import codex.store.EphemeralStore
-import codex.store.ProjectStore
+import codex.store.{EphemeralStore, ProjectStore}
 import com.google.common.collect.{Multimap, HashMultimap}
 import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
