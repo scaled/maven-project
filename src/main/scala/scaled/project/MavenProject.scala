@@ -5,9 +5,10 @@
 package scaled.project
 
 import codex.extract.JavaExtractor
+import codex.model.Source
 import codex.store.{EphemeralStore, ProjectStore}
 import com.google.common.collect.{Multimap, HashMultimap}
-import java.io.File
+import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, FileVisitResult, Path, SimpleFileVisitor}
 import pomutil.{DependResolver, Dependency, POM}
@@ -94,16 +95,33 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
   override protected def ignores = MavenProject.mavenIgnores
 
   // TEMP: for now auto-populate project store the first time we're loaded
-  override protected def createProjectStore () :ProjectStore = {
+  override protected def createProjectCodex () :ProjectCodex = new ProjectCodex(this) {
     import scala.collection.convert.WrapAsJava._
-    val store = super.createProjectStore().asInstanceOf[EphemeralStore]
-    val javas = summarizeSources(false).get("java")
-    if (!javas.isEmpty) {
-      new JavaExtractor() {
-        override def classpath = buildClasspath
-      }.process(javas, store.writer)
+
+    val javac = new JavaExtractor() {
+      override def classpath = buildClasspath
     }
-    store
+    def estore = projectStore.asInstanceOf[EphemeralStore]
+
+    // the first time we're run, compile all of our source files
+    metaSvc.exec.runInBG { reindexAll() }
+
+    // TODO: use Nexus or actors instead of this ham-fisted syncing
+    def reindexAll () :Unit = synchronized {
+      val javas = summarizeSources(false).get("java")
+      println(s"Reindexing ${javas.size} java files")
+      if (!javas.isEmpty) javac.process(javas, estore.writer)
+    }
+
+    override protected def reindex (source :Source) :Unit = synchronized {
+      if (source.fileExt == "java") {
+        println(s"Reindexing $source")
+        // TODO: have JavaExtractor take Source and make a JavaFileObject from it?
+        // also TODO: only reindex if the file has changed since we last indexed
+        javac.process(Seq(Paths.get(source.toString)), estore.writer)
+      }
+      reindexComplete(source)
+    }
   }
 
   def summarizeSources (includeTest :Boolean) :Multimap[String,Path] = {
@@ -159,9 +177,9 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
         // with non-MavenProjects?
         Some(proj.outputDir)
       case _ =>
-        val m2file = dep.localArtifact orElse dep.systemPath.map(new File(_))
+        val m2file = dep.localArtifact.map(_.toPath) orElse dep.systemPath.map(p => Paths.get(p))
         if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
-        m2file.map(_.toPath)
+        m2file
     }
   }
 
