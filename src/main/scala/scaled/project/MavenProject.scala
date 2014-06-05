@@ -43,11 +43,15 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
   // because it's low overhead; I may change my mind on this front later, hence this note
 
   override def name = pom.artifactId
-  override def id = Some(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version))
-  override def sourceURL = pom.scm.connection.map(stripSCM).flatMap(srcURLFromString)
-  override def depends = transitiveDepends(false) map { dep =>
-    RepoDepend(RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version))
+
+  override def ids = Seq(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)) ++ {
+    def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
+    pom.scm.connection map(stripSCM(_).split(":", 2)) collect {
+      case Array(vcs, url) => SrcURL(vcs, url)
+    }
   }
+
+  override def depends = transitiveDepends(false) map(toId)
 
   override def describeSelf (bb :BufferBuilder) {
     super.describeSelf(bb)
@@ -165,27 +169,27 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
     // check whether this dependency is known to Scaled, and use the known version instead of the
     // default (which looks in ~/.m2 for an installed POM)
     override def localDep (dep :Dependency) = (for {
-      proj <- projectSvc.projectFor(toDepend(dep))
+      proj <- projectSvc.projectFor(toId(dep))
       pom  <- POM.fromFile(proj.root.resolve("pom.xml").toFile)
     } yield pom) orElse super.localDep(dep)
   }.resolve(forTest)
 
   protected def classpath (deps :Seq[Dependency]) :Seq[Path] = deps flatMap { dep =>
-    projectSvc.projectFor(toDepend(dep)) match {
-      case Some(proj :MavenProject) =>
-        // TODO: have JavaProject which reports outputDir, so that we can interoperate
-        // with non-MavenProjects?
-        Some(proj.outputDir)
-      case _ =>
-        val m2file = dep.localArtifact.map(_.toPath) orElse dep.systemPath.map(p => Paths.get(p))
-        if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
-        m2file
+    projectSvc.projectFor(toId(dep)) match {
+      // TODO: have JavaProject which reports outputDir, so that we can interoperate with
+      // non-MavenProjects?
+      case Some(proj :MavenProject) => Some(proj.outputDir)
+      case _                        => resolveJar(dep)
     }
   }
 
-  private def toDepend (dep :Dependency) =
-    RepoDepend(RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version))
-  private def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
+  private def resolveJar (dep :Dependency) :Option[Path] = {
+    val m2file = dep.localArtifact.map(_.toPath) orElse dep.systemPath.map(p => Paths.get(p))
+    if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
+    m2file
+  }
+
+  private def toId (dep :Dependency) = RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version)
 }
 
 object MavenProject {
