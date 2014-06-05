@@ -17,8 +17,8 @@ import scala.collection.mutable.{Map => MMap}
 import scaled._
 import scaled.util.BufferBuilder
 
-class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService)
-    extends FileProject(root, metaSvc) with JavaProject {
+class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectService)
+    extends AbstractFileProject(msvc) with JavaProject {
   import scala.collection.convert.WrapAsScala._
   import Project._
   import Maven._

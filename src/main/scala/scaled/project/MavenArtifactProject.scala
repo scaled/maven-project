@@ -7,16 +7,21 @@ package scaled.project
 import java.nio.file.{Files, Path}
 import scaled._
 
-class MavenArtifactProject (artifact :MavenArtifactProject.Artifact, metaSvc :MetaService)
-    extends ZipFileProject(artifact.root, metaSvc) with JavaProject {
+class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService)
+    extends AbstractZipFileProject(msvc) with JavaProject {
 
-  def id = artifact.repoId
+  def id = af.repoId
+
+  override val root = af.pom
+  override val zipPaths = if (Files.exists(af.sources)) Seq(af.sources) else Seq()
   override def isIncidental = true
   override def name = s"${id.artifactId}:${id.version}"
   override def ids = Seq(id)
+  override def classes = af.classes
 
-  // our classes are in our root jar
-  override def classes = artifact.classes
+  // TODO: project store on our -sources jar
+
+  // TODO: try to download our -sources file if it does not already exist
 }
 
 object MavenArtifactProject {
@@ -24,15 +29,9 @@ object MavenArtifactProject {
   import Maven._
 
   case class Artifact (repoId :RepoId) {
-    val pom     = resolvePOM(repoId)
-    val classes = resolveClasses(repoId)
-    val sources = resolveSources(repoId)
-
-    // if we have a classes jar file for this dependency, go for it
-    def validate :Option[Artifact] = if (Files.exists(classes)) Some(this) else None
-
-    // we'll use sources if we have 'em but otherwise we still try to do something useful
-    def root = if (Files.exists(sources)) sources else classes
+    lazy val pom     = resolvePOM(repoId)
+    lazy val classes = resolveClasses(repoId)
+    lazy val sources = resolveSources(repoId)
   }
 
   @Plugin(tag="project-finder")
@@ -40,7 +39,10 @@ object MavenArtifactProject {
     override def checkRoot (root :Path) :Int = -1 // we never resolve by root
 
     override def apply (id :Project.Id) = id match {
-      case repoId :RepoId => Artifact(repoId).validate.map(createProject(_))
+      case repoId :RepoId =>
+        val af = Artifact(repoId)
+        if (Files.exists(af.classes)) Some(createProject(af))
+        else None
       case _ => None
     }
   }
