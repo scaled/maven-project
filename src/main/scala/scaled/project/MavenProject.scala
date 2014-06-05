@@ -18,12 +18,13 @@ import scaled._
 import scaled.util.BufferBuilder
 
 class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService)
-    extends FileProject(root, metaSvc) {
+    extends FileProject(root, metaSvc) with JavaProject {
   import scala.collection.convert.WrapAsScala._
   import Project._
+  import Maven._
 
-  private[this] val pomFile = root.resolve("pom.xml")
-  private[this] var pom = POM.fromFile(pomFile.toFile) getOrElse {
+  private val pomFile = root.resolve("pom.xml")
+  private var pom = POM.fromFile(pomFile.toFile) getOrElse {
     throw new IllegalArgumentException("Unable to load $pomFile")
   }
 
@@ -162,34 +163,28 @@ class MavenProject (root :Path, metaSvc :MetaService, projectSvc :ProjectService
   def buildClasspath :Seq[Path] = outputDir +: classpath(transitiveDepends(false))
   def testClasspath :Seq[Path] = testOutputDir +: outputDir +: classpath(transitiveDepends(true))
 
+  // tell other Java projects where to find our compiled classes
+  override def classes = outputDir
+
   private def buildDir (key :String, defpath :String) :Path =
     root.resolve(pom.buildProps.getOrElse(key, defpath))
 
   protected def transitiveDepends (forTest :Boolean) :Seq[Dependency] = new DependResolver(pom) {
-    // check whether this dependency is known to Scaled, and use the known version instead of the
-    // default (which looks in ~/.m2 for an installed POM)
-    override def localDep (dep :Dependency) = (for {
-      proj <- projectSvc.projectFor(toId(dep))
-      pom  <- POM.fromFile(proj.root.resolve("pom.xml").toFile)
-    } yield pom) orElse super.localDep(dep)
+    // check whether this dependency is known to Scaled, and use the known version's POM instead of
+    // the default POM (which comes from ~/.m2 and may be stale for snapshot depends)
+    override def localDep (dep :Dependency) = projectPOM(toId(dep)) orElse super.localDep(dep)
+    private def projectPOM (id :RepoId) = projectSvc.projectFor(id) match {
+      case Some(proj :MavenProject) => Some(proj.pom)
+      case _ => None
+    }
   }.resolve(forTest)
 
-  protected def classpath (deps :Seq[Dependency]) :Seq[Path] = deps flatMap { dep =>
-    projectSvc.projectFor(toId(dep)) match {
-      // TODO: have JavaProject which reports outputDir, so that we can interoperate with
-      // non-MavenProjects?
-      case Some(proj :MavenProject) => Some(proj.outputDir)
-      case _                        => resolveJar(dep)
+  protected def classpath (deps :Seq[Dependency]) :Seq[Path] = deps map(toId) map { id =>
+    projectSvc.projectFor(id) match {
+      case Some(proj :JavaProject) => proj.classes
+      case _                       => resolveClasses(id)
     }
   }
-
-  private def resolveJar (dep :Dependency) :Option[Path] = {
-    val m2file = dep.localArtifact.map(_.toPath) orElse dep.systemPath.map(p => Paths.get(p))
-    if (!m2file.isDefined) log.log(s"MavenProject($root) unable to resolve jar for $dep")
-    m2file
-  }
-
-  private def toId (dep :Dependency) = RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version)
 }
 
 object MavenProject {
