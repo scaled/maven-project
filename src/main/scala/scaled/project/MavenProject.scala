@@ -24,9 +24,10 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
   import Maven._
 
   private val pomFile = root.resolve("pom.xml")
-  private var pom = POM.fromFile(pomFile.toFile) getOrElse {
+  private var _pom = POM.fromFile(pomFile.toFile) getOrElse {
     throw new IllegalArgumentException("Unable to load $pomFile")
   }
+  def pom = _pom
 
   // watch the POM file for changes, if it does change, hibernate which will cause is to reload
   // everything when we're next referenced
@@ -37,7 +38,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
       case Some(pom) =>
         metaSvc.log.log(s"$name: auto-reloded: $file")
         hibernate()
-        this.pom = pom
+        _pom = pom
     }
   })
   // note that we don't 'close' our watch, we'll keep it active for the lifetime of the editor
@@ -52,7 +53,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     }
   }
 
-  override def depends = transitiveDepends(false) map(toId)
+  override def depends = _depends.transitiveDepends(false) map(toId)
 
   override def describeSelf (bb :BufferBuilder) {
     super.describeSelf(bb)
@@ -160,31 +161,17 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
   def outputDir :Path = buildDir("outputDirectory", "target/classes")
   def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
 
-  def buildClasspath :Seq[Path] = outputDir +: classpath(transitiveDepends(false))
-  def testClasspath :Seq[Path] = testOutputDir +: outputDir +: classpath(transitiveDepends(true))
+  def buildClasspath :Seq[Path] = outputDir +: _depends.classpath(false)
+  def testClasspath :Seq[Path] = testOutputDir +: outputDir +: _depends.classpath(true)
 
   // tell other Java projects where to find our compiled classes
   override def classes = outputDir
 
+  private val _depends = new Maven.Depends(projectSvc) {
+    def pom = _pom
+  }
   private def buildDir (key :String, defpath :String) :Path =
     root.resolve(pom.buildProps.getOrElse(key, defpath))
-
-  protected def transitiveDepends (forTest :Boolean) :Seq[Dependency] = new DependResolver(pom) {
-    // check whether this dependency is known to Scaled, and use the known version's POM instead of
-    // the default POM (which comes from ~/.m2 and may be stale for snapshot depends)
-    override def localDep (dep :Dependency) = projectPOM(toId(dep)) orElse super.localDep(dep)
-    private def projectPOM (id :RepoId) = projectSvc.projectFor(id) match {
-      case Some(proj :MavenProject) => Some(proj.pom)
-      case _ => None
-    }
-  }.resolve(forTest)
-
-  protected def classpath (deps :Seq[Dependency]) :Seq[Path] = deps map(toId) map { id =>
-    projectSvc.projectFor(id) match {
-      case Some(proj :JavaProject) => proj.classes
-      case _                       => resolveClasses(id)
-    }
-  }
 }
 
 object MavenProject {
