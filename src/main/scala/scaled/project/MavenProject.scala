@@ -21,7 +21,6 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     extends AbstractFileProject(msvc) with JavaProject {
   import scala.collection.convert.WrapAsScala._
   import Project._
-  import Maven._
 
   private val pomFile = root.resolve("pom.xml")
   private var _pom = POM.fromFile(pomFile.toFile) getOrElse {
@@ -75,7 +74,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     }
   }
 
-  override def depends = (_depends.transitiveDepends(false) map(toId)) :+ platformDepend
+  override def depends = _depends.transitive(false) :+ platformDepend
 
   // TODO: infer the desired Java version from the maven-compiler-plugin POM section?
   private def platformDepend = PlatformId(JavaPlatform, JDK.thisJDK.majorVersion)
@@ -170,7 +169,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     }
   }
 
-  private val _depends = new Maven.Depends(projectSvc) {
+  private val _depends = new Depends(projectSvc) {
     def pom = _pom
   }
   private def buildDir (key :String, defpath :String) :Path =
