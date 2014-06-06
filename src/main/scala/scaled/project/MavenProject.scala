@@ -44,6 +44,28 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
   // note that we don't 'close' our watch, we'll keep it active for the lifetime of the editor
   // because it's low overhead; I may change my mind on this front later, hence this note
 
+  def summarizeSources (includeTest :Boolean) :Multimap[String,Path] = {
+    val bySuff = HashMultimap.create[String,Path]()
+    onSources(includeTest) { file =>
+      val fname = file.getFileName.toString
+      fname.lastIndexOf(".") match {
+        case -1 => // skip it!
+        case ii => bySuff.put(fname.substring(ii+1), file)
+      }
+    }
+    bySuff
+  }
+
+  def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
+  def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
+  def allSourceDirs = sourceDirs ++ testSourceDirs
+
+  def outputDir :Path = buildDir("outputDirectory", "target/classes")
+  def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
+
+  def buildClasspath :Seq[Path] = outputDir +: _depends.classpath(false)
+  def testClasspath :Seq[Path] = testOutputDir +: outputDir +: _depends.classpath(true)
+
   override def name = pom.artifactId
 
   override def ids = Seq(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)) ++ {
@@ -76,6 +98,9 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     bb.addSection("Test classpath:")
     testClasspath foreach { p => bb.add(p.toString) }
   }
+
+  // tell other Java projects where to find our compiled classes
+  override def classes = outputDir
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
   override protected def createCompiler () = new ScalaCompiler(metaSvc, this) {
@@ -130,18 +155,6 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     }
   }
 
-  def summarizeSources (includeTest :Boolean) :Multimap[String,Path] = {
-    val bySuff = HashMultimap.create[String,Path]()
-    onSources(includeTest) { file =>
-      val fname = file.getFileName.toString
-      fname.lastIndexOf(".") match {
-        case -1 => // skip it!
-        case ii => bySuff.put(fname.substring(ii+1), file)
-      }
-    }
-    bySuff
-  }
-
   private def onSources (includeTest :Boolean)(fn :Path => Unit) {
     (if (includeTest) allSourceDirs else sourceDirs).filter(Files.exists(_)) foreach { dir =>
       // TODO: should we be following symlinks? likely so...
@@ -153,19 +166,6 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
       })
     }
   }
-
-  def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
-  def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
-  def allSourceDirs = sourceDirs ++ testSourceDirs
-
-  def outputDir :Path = buildDir("outputDirectory", "target/classes")
-  def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
-
-  def buildClasspath :Seq[Path] = outputDir +: _depends.classpath(false)
-  def testClasspath :Seq[Path] = testOutputDir +: outputDir +: _depends.classpath(true)
-
-  // tell other Java projects where to find our compiled classes
-  override def classes = outputDir
 
   private val _depends = new Maven.Depends(projectSvc) {
     def pom = _pom
