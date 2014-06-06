@@ -9,5 +9,4 @@ license: New BSD
  depend: git:https://github.com/scaled/project-service.git
  depend: git:https://github.com/scaled/java-project.git
  depend: git:https://github.com/scaled/scala-project.git
- depend: mvn:com.samskivert.codex:codex-java:1.0-SNAPSHOT
  depend: mvn:com.samskivert:pom-util:0.7-SNAPSHOT
