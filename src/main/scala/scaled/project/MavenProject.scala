@@ -142,7 +142,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     // TODO: use Nexus or actors instead of this ham-fisted syncing
     def reindexAll () :Unit = synchronized {
       val javas = summarizeSources(false).get("java")
-      println(s"Reindexing ${javas.size} java files")
+      println(s"Reindexing ${javas.size} java files in $name")
       if (!javas.isEmpty) javac.process(javas, estore.writer)
     }
 
