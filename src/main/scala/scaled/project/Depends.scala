@@ -31,6 +31,9 @@ abstract class Depends (projectSvc :ProjectService) {
       }
     }
 
+  // TODO: infer the desired Java version from the maven-compiler-plugin POM section?
+  def platformDepend = PlatformId(JavaPlatform, JDK.thisJDK.majorVersion)
+
   private def toId (dep :Dependency) = RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version)
 
   private def transitiveDepends (forTest :Boolean) = new DependResolver(pom) {

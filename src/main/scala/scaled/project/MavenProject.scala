@@ -74,10 +74,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     }
   }
 
-  override def depends = _depends.transitive(false) :+ platformDepend
-
-  // TODO: infer the desired Java version from the maven-compiler-plugin POM section?
-  private def platformDepend = PlatformId(JavaPlatform, JDK.thisJDK.majorVersion)
+  override def depends = _depends.transitive(false) :+ _depends.platformDepend
 
   override def describeSelf (bb :BufferBuilder) {
     super.describeSelf(bb)
