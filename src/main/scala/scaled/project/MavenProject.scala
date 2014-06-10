@@ -102,7 +102,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
   override def classes = outputDir
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
-  override protected def createCompiler () = new ScalaCompiler(metaSvc, this) {
+  override protected def createCompiler () = new ScalaCompiler(this) {
     override def sourceDirs = MavenProject.this.sourceDirs
     override def buildClasspath = MavenProject.this.buildClasspath
     override def outputDir = MavenProject.this.outputDir
