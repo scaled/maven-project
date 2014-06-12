@@ -4,8 +4,6 @@ version: 1.0
 descrip: Provides Maven project support for Scaled.
  weburl: https://github.com/scaled/maven-project
 license: New BSD
- srcdir: src/main/scala
- bindir: target/classes
  depend: git:https://github.com/scaled/project-service.git
  depend: git:https://github.com/scaled/java-project.git
  depend: git:https://github.com/scaled/scala-project.git
