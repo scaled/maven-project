@@ -4,22 +4,11 @@
 
 package scaled.project
 
-import codex.extract.JavaExtractor
-import codex.model.Source
-import codex.store.ProjectStore
-import com.google.common.collect.{Multimap, HashMultimap}
-import java.nio.file.Paths
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{Files, FileVisitResult, Path, SimpleFileVisitor}
-import pomutil.{DependResolver, Dependency, POM}
-import reactual.Future
-import scala.collection.mutable.{Map => MMap}
+import java.nio.file.Path
+import pomutil.POM
 import scaled._
-import scaled.util.BufferBuilder
 
-class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectService)
-    extends AbstractFileProject(msvc) with JavaProject {
-  import scala.collection.convert.WrapAsScala._
+class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProject(msvc) {
   import Project._
 
   private val pomFile = root.resolve("pom.xml")
@@ -43,28 +32,6 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
   // note that we don't 'close' our watch, we'll keep it active for the lifetime of the editor
   // because it's low overhead; I may change my mind on this front later, hence this note
 
-  def summarizeSources (includeTest :Boolean) :Multimap[String,Path] = {
-    val bySuff = HashMultimap.create[String,Path]()
-    onSources(includeTest) { file =>
-      val fname = file.getFileName.toString
-      fname.lastIndexOf(".") match {
-        case -1 => // skip it!
-        case ii => bySuff.put(fname.substring(ii+1), file)
-      }
-    }
-    bySuff
-  }
-
-  def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
-  def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
-  def allSourceDirs = sourceDirs ++ testSourceDirs
-
-  def outputDir :Path = buildDir("outputDirectory", "target/classes")
-  def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
-
-  def buildClasspath :Seq[Path] = outputDir +: _depends.classpath(false)
-  def testClasspath :Seq[Path] = testOutputDir +: outputDir +: _depends.classpath(true)
-
   override def name = pom.artifactId
 
   override def ids = Seq(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)) ++ {
@@ -76,30 +43,11 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
 
   override def depends = _depends.transitive(false) :+ _depends.platformDepend
 
-  override def describeSelf (bb :BufferBuilder) {
-    super.describeSelf(bb)
+  override def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
+  override def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
 
-    bb.addSubHeader("Maven Info")
-    bb.addSection("Source dirs:")
-    bb.addKeysValues("compile: " -> sourceDirs.mkString(" "),
-                     "test: "    -> testSourceDirs.mkString(" "))
-    val srcsum = summarizeSources(true)
-    if (!srcsum.isEmpty) {
-      bb.addSection("Source files:")
-      bb.addKeysValues(srcsum.asMap.entrySet.map(
-        e => (s".${e.getKey}: ", e.getValue.size.toString)).toSeq :_*)
-    }
-    bb.addSection("Output dirs:")
-    bb.addKeysValues("compile: " -> outputDir.toString,
-                     "test: "    -> testOutputDir.toString)
-    bb.addSection("Compile classpath:")
-    buildClasspath foreach { p => bb.add(p.toString) }
-    bb.addSection("Test classpath:")
-    testClasspath foreach { p => bb.add(p.toString) }
-  }
-
-  // tell other Java projects where to find our compiled classes
-  override def classes = outputDir
+  override def outputDir :Path = buildDir("outputDirectory", "target/classes")
+  override def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
   override protected def createCompiler () = new ScalaCompiler(this) {
@@ -111,61 +59,11 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     override def testOutputDir = MavenProject.this.testOutputDir
   }
 
-  // TODO: how to determine what kind of tester to use?
-  override protected def createTester () :Tester = new JUnitTester(this) {
-    override def testSourceDirs = MavenProject.this.testSourceDirs
-    override def testOutputDir = MavenProject.this.testOutputDir
-    override def testClasspath = MavenProject.this.testClasspath
-  }
-
-  override protected def createRunner () = new JavaRunner(this) {
-    override def execClasspath = buildClasspath // TODO
-  }
-
   override protected def ignores = MavenProject.mavenIgnores
 
-  // TEMP: for now auto-populate project store the first time we're loaded
-  override protected def createProjectCodex () :ProjectCodex = new ProjectCodex(this) {
-    import scala.collection.convert.WrapAsJava._
+  override protected def dependClasspath (forTest :Boolean) = _depends.classpath(forTest)
 
-    val javac = new JavaExtractor() {
-      override def classpath = buildClasspath
-    }
-
-    // the first time we're run, compile all of our source files
-    // metaSvc.exec.runInBG { reindexAll() }
-
-    // TODO: use Nexus or actors instead of this ham-fisted syncing
-    def reindexAll () :Unit = synchronized {
-      val javas = summarizeSources(false).get("java")
-      println(s"Reindexing ${javas.size} java files in $name")
-      if (!javas.isEmpty) javac.process(javas, projectStore.writer)
-    }
-
-    override protected def reindex (source :Source) :Unit = synchronized {
-      if (source.fileExt == "java") {
-        println(s"Reindexing $source")
-        // TODO: have JavaExtractor take Source and make a JavaFileObject from it?
-        // also TODO: only reindex if the file has changed since we last indexed
-        javac.process(Seq(Paths.get(source.toString)), projectStore.writer)
-      }
-      reindexComplete(source)
-    }
-  }
-
-  private def onSources (includeTest :Boolean)(fn :Path => Unit) {
-    (if (includeTest) allSourceDirs else sourceDirs).filter(Files.exists(_)) foreach { dir =>
-      // TODO: should we be following symlinks? likely so...
-      Files.walkFileTree(dir, new SimpleFileVisitor[Path]() {
-        override def visitFile (file :Path, attrs :BasicFileAttributes) = {
-          if (!attrs.isDirectory) fn(file)
-          FileVisitResult.CONTINUE
-        }
-      })
-    }
-  }
-
-  private val _depends = new Depends(projectSvc) {
+  private val _depends = new Depends(msvc.service[ProjectService]) {
     def pom = _pom
   }
   private def buildDir (key :String, defpath :String) :Path =

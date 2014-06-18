@@ -42,12 +42,12 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
     }
 
     // the first time we're run, compile all of our source files
-    // metaSvc.exec.runInBG { reindexAll() }
+    metaSvc.exec.runInBG { reindexAll() }
 
     // TODO: use Nexus or actors instead of this ham-fisted syncing
     def reindexAll () :Unit = synchronized {
-      val sources = new ZipFile(zipPaths.head.toFile)
-      println(s"Reindexing ${sources.size} java files in $zipPaths...")
+      val sources = new ZipFile(root.toFile)
+      println(s"Reindexing ${sources.size} java files in $root...")
       javac.process(sources, projectStore.writer)
     }
 
