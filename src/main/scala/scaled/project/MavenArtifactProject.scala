@@ -6,7 +6,6 @@ package scaled.project
 
 import codex.extract.JavaExtractor
 import codex.model.Source
-import codex.store.EphemeralStore
 import java.nio.file.{Files, Path}
 import java.util.zip.ZipFile
 import pomutil.POM
@@ -41,16 +40,15 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
     val javac = new JavaExtractor() {
       override def classpath = _depends.classpath(false)
     }
-    def estore = projectStore.asInstanceOf[EphemeralStore]
 
     // the first time we're run, compile all of our source files
-    metaSvc.exec.runInBG { reindexAll() }
+    // metaSvc.exec.runInBG { reindexAll() }
 
     // TODO: use Nexus or actors instead of this ham-fisted syncing
     def reindexAll () :Unit = synchronized {
       val sources = new ZipFile(zipPaths.head.toFile)
       println(s"Reindexing ${sources.size} java files in $zipPaths...")
-      javac.process(sources, estore.writer)
+      javac.process(sources, projectStore.writer)
     }
 
     override protected def reindex (source :Source) :Unit = synchronized {

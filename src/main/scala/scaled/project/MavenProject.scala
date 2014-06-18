@@ -6,7 +6,7 @@ package scaled.project
 
 import codex.extract.JavaExtractor
 import codex.model.Source
-import codex.store.{EphemeralStore, ProjectStore}
+import codex.store.ProjectStore
 import com.google.common.collect.{Multimap, HashMultimap}
 import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
@@ -131,16 +131,15 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
     val javac = new JavaExtractor() {
       override def classpath = buildClasspath
     }
-    def estore = projectStore.asInstanceOf[EphemeralStore]
 
     // the first time we're run, compile all of our source files
-    metaSvc.exec.runInBG { reindexAll() }
+    // metaSvc.exec.runInBG { reindexAll() }
 
     // TODO: use Nexus or actors instead of this ham-fisted syncing
     def reindexAll () :Unit = synchronized {
       val javas = summarizeSources(false).get("java")
       println(s"Reindexing ${javas.size} java files in $name")
-      if (!javas.isEmpty) javac.process(javas, estore.writer)
+      if (!javas.isEmpty) javac.process(javas, projectStore.writer)
     }
 
     override protected def reindex (source :Source) :Unit = synchronized {
@@ -148,7 +147,7 @@ class MavenProject (val root :Path, msvc :MetaService, projectSvc :ProjectServic
         println(s"Reindexing $source")
         // TODO: have JavaExtractor take Source and make a JavaFileObject from it?
         // also TODO: only reindex if the file has changed since we last indexed
-        javac.process(Seq(Paths.get(source.toString)), estore.writer)
+        javac.process(Seq(Paths.get(source.toString)), projectStore.writer)
       }
       reindexComplete(source)
     }
