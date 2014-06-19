@@ -4,9 +4,10 @@
 
 package scaled.project
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import pomutil.POM
 import scaled._
+import scaled.pacman.Filez
 
 class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProject(msvc) {
   import Project._
@@ -57,6 +58,20 @@ class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProje
     override def testSourceDirs = MavenProject.this.testSourceDirs
     override def testClasspath = MavenProject.this.testClasspath
     override def testOutputDir = MavenProject.this.testOutputDir
+
+    override protected def willCompile (tests :Boolean) {
+      if (tests) pom.testResources foreach copyResources(testOutputDir)
+      else pom.resources foreach copyResources(outputDir)
+    }
+  }
+
+  private def copyResources (target :Path)(rsrc :POM.Resource) {
+    if (rsrc.targetPath.isDefined || rsrc.filtering || !rsrc.includes.isEmpty ||
+        !rsrc.excludes.isEmpty) metaSvc.log.log("Complex <resources> not yet supported " + rsrc)
+    else {
+      val rsrcDir = root.resolve(rsrc.directory)
+      if (Files.exists(rsrcDir)) Filez.copyAll(rsrcDir, target)
+    }
   }
 
   override protected def ignores = MavenProject.mavenIgnores
