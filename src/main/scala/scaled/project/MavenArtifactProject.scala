@@ -6,6 +6,7 @@ package scaled.project
 
 import codex.extract.JavaExtractor
 import codex.model.Source
+import java.io.File
 import java.nio.file.{Files, Path}
 import java.util.zip.ZipFile
 import pomutil.POM
@@ -31,7 +32,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
 
   override def depends = _depends.transitive(false) :+ _depends.platformDepend
 
-  override protected def metaDir = af.pom.getParent.resolve(".scaled")
+  override protected def metaDir = root.getParent.resolve(".scaled")
 
   // TEMP: for now auto-populate project store the first time we're loaded
   override protected def createProjectCodex () :ProjectCodex = new ProjectCodex(this) {
@@ -71,7 +72,9 @@ object MavenArtifactProject {
 
   @Plugin(tag="project-finder")
   class FinderPlugin extends ProjectFinderPlugin("mavenrepo", true, classOf[MavenArtifactProject]) {
-    override def checkRoot (root :Path) :Int = -1 // we never resolve by root
+    private def isJar (path :Path) = path.getFileName.toString endsWith ".jar"
+    private def isInM2Repo (path :Path) = path startsWith Maven.m2repo
+    override def checkRoot (root :Path) :Int = if (isJar(root) && isInM2Repo(root)) 1 else -1
 
     override def apply (id :Project.Id) = id match {
       case repoId :RepoId =>
@@ -80,5 +83,14 @@ object MavenArtifactProject {
         else None
       case _ => None
     }
+
+    private def rootToArtifact (root :Path) :Artifact = {
+      val versDir = root.getParent ; val version = versDir.getFileName.toString
+      val artiDir = versDir.getParent ; val artifactId = artiDir.getFileName.toString
+      val groupPath = Maven.m2repo.relativize(artiDir.getParent)
+      val groupId = groupPath.toString.replace(File.separatorChar, '.')
+      Artifact(RepoId(MavenRepo, groupId, artifactId, version))
+    }
+    override protected def createProjectIn (root :Path) = createProject(rootToArtifact(root))
   }
 }
