@@ -34,7 +34,6 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
 
   override protected def metaDir = root.getParent.resolve(".scaled")
 
-  // TEMP: for now auto-populate project store the first time we're loaded
   override protected def createProjectCodex () :ProjectCodex = new ProjectCodex(this) {
     import scala.collection.convert.WrapAsJava._
 
@@ -42,8 +41,11 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
       override def classpath = _depends.classpath(false)
     }
 
-    // the first time we're run, compile all of our source files
-    metaSvc.exec.runInBG { reindexAll() }
+    // if our project store is empty, run an initial index immediately
+    if (!projectStore.topLevelDefs.iterator.hasNext) {
+      // (TODO: queue this up so that we're only indexing one project at a time?)
+      metaSvc.exec.runInBG { reindexAll() }
+    }
 
     // TODO: use Nexus or actors instead of this ham-fisted syncing
     def reindexAll () :Unit = synchronized {
