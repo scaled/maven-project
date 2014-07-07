@@ -30,7 +30,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
   override def ids = Seq(id)
   override def classes = af.classes
 
-  override def depends = _depends.transitive(false) :+ _depends.platformDepend
+  override def depends = _depends.transitive :+ _depends.platformDepend
 
   override protected def metaDir = root.getParent.resolve(".scaled")
 
@@ -38,7 +38,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
     import scala.collection.convert.WrapAsJava._
 
     val javac = new JavaExtractor() {
-      override def classpath = _depends.classpath(false)
+      override def classpath = _depends.buildClasspath
     }
 
     // if our project store is empty, run an initial index immediately

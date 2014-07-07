@@ -42,7 +42,7 @@ class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProje
     }
   }
 
-  override def depends = _depends.transitive(false) :+ _depends.platformDepend
+  override def depends = _depends.transitive :+ _depends.platformDepend
 
   override def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
   override def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
@@ -83,8 +83,9 @@ class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProje
   }
 
   override protected def ignores = MavenProject.mavenIgnores
-
-  override protected def dependClasspath (forTest :Boolean) = _depends.classpath(forTest)
+  override protected def buildDependClasspath = _depends.buildClasspath
+  override protected def testDependClasspath = _depends.testClasspath
+  override protected def execDependClasspath = _depends.execClasspath
 
   private val _depends = new Depends(msvc.service[ProjectService]) {
     def pom = _pom
