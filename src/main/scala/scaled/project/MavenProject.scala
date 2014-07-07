@@ -59,6 +59,14 @@ class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProje
     override def testClasspath = MavenProject.this.testClasspath
     override def testOutputDir = MavenProject.this.testOutputDir
 
+    override def javacOpts = {
+      // look for source/target configuration
+      val cps = pom.plugin("org.apache.maven.plugins", "maven-compiler-plugin")
+      cps.flatMap(_.configValue("source")).takeRight(1).flatMap(List("-source", _)) ++
+      cps.flatMap(_.configValue("target")).takeRight(1).flatMap(List("-target", _))
+    }
+    // override def scalacOpts :Seq[String] = Seq()
+
     override protected def willCompile (tests :Boolean) {
       if (tests) pom.testResources foreach copyResources(testOutputDir)
       else pom.resources foreach copyResources(outputDir)
