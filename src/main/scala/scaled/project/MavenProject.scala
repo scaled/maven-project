@@ -9,7 +9,7 @@ import pomutil.POM
 import scaled._
 import scaled.pacman.Filez
 
-class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProject(msvc) {
+class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProject(ps) {
   import Project._
 
   private val pomFile = root.resolve("pom.xml")
@@ -34,15 +34,16 @@ class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProje
   // because it's low overhead; I may change my mind on this front later, hence this note
 
   override def name = pom.artifactId
+  override def idName = s"mvn-${pom.groupId}_${pom.artifactId}_${pom.version}"
+  override def ids = Seq(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)) ++ pomSrcId
+  override def depends = _depends.transitive :+ _depends.platformDepend
 
-  override def ids = Seq(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)) ++ {
+  private def pomSrcId = {
     def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
     pom.scm.connection map(stripSCM(_).split(":", 2)) collect {
       case Array(vcs, url) => SrcURL(vcs, url)
     }
   }
-
-  override def depends = _depends.transitive :+ _depends.platformDepend
 
   override def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
   override def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
@@ -87,7 +88,7 @@ class MavenProject (val root :Path, msvc :MetaService) extends AbstractJavaProje
   override protected def testDependClasspath = _depends.testClasspath
   override protected def execDependClasspath = _depends.execClasspath
 
-  private val _depends = new Depends(msvc.service[ProjectService]) {
+  private val _depends = new Depends(pspace) {
     def pom = _pom
   }
   private def buildDir (key :String, defpath :String) :Path =

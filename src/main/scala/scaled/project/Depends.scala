@@ -9,13 +9,13 @@ import java.nio.file.{Path, Paths}
 import pomutil.{DependResolver, Dependency, POM}
 
 /** A helper class for merging Maven depends with Scaled projects. */
-abstract class Depends (projectSvc :ProjectService) {
+abstract class Depends (pspace :ProjectSpace) {
   import Project._
 
   /** Returns the POM we use to resolve depends. */
   def pom :POM
 
-  /** Resolves depends for [[pom]], using `projectSvc` to resolve projects known to Scaled in lieu
+  /** Resolves depends for [[pom]], using `pspace` to resolve projects known to Scaled in lieu
     * of artifacts in the local Maven repo. */
   def transitive :Seq[Project.Id] = transitiveDepends(DependResolver.Compile) flatMap(toId)
 
@@ -35,7 +35,7 @@ abstract class Depends (projectSvc :ProjectService) {
 
   protected def classpath (scope :DependResolver.Scope) :Seq[Path] =
     transitiveDepends(scope) map { dep => toId(dep) match {
-      case Some(id) => projectSvc.projectFor(id) match {
+      case Some(id) => pspace.projectFor(id) match {
         case Some(proj :JavaProject) => proj.classes
         case _                       => dep.systemPath match {
           case Some(path) => Paths.get(path)
@@ -50,7 +50,7 @@ abstract class Depends (projectSvc :ProjectService) {
     // the default POM (which comes from ~/.m2 and may be stale for snapshot depends)
     override def localDep (dep :Dependency) =
       toId(dep).flatMap(projectPOM) orElse super.localDep(dep)
-    private def projectPOM (id :RepoId) = projectSvc.projectFor(id) match {
+    private def projectPOM (id :RepoId) = pspace.projectFor(id) match {
       case Some(proj :MavenProject) => Some(proj.pom)
       case _                        => None
     }

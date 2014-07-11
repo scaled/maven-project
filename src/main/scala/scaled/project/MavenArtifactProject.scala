@@ -12,14 +12,14 @@ import java.util.zip.ZipFile
 import pomutil.POM
 import scaled._
 
-class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService)
-    extends AbstractZipFileProject(msvc) with JavaProject {
+class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
+    extends AbstractZipFileProject(ps) with JavaProject {
 
   private def id = af.repoId
   private val _pom = POM.fromFile(af.pom.toFile) getOrElse {
     throw new IllegalArgumentException("Unable to load ${af.pom}")
   }
-  private val _depends = new Depends(metaSvc.service[ProjectService]) {
+  private val _depends = new Depends(pspace) {
     def pom = _pom
   }
 
@@ -27,12 +27,10 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, msvc :MetaService
   override val zipPaths = Seq(af.sources)
   override def isIncidental = true
   override def name = s"${id.artifactId}:${id.version}"
+  override def idName = s"mvn-${id.groupId}_${id.artifactId}_${id.version}"
   override def ids = Seq(id)
   override def classes = af.classes
-
   override def depends = _depends.transitive :+ _depends.platformDepend
-
-  override protected def metaDir = root.getParent.resolve(".scaled")
 
   override protected def createProjectCodex () :ProjectCodex = new ProjectCodex(this) {
     import scala.collection.convert.WrapAsJava._
@@ -81,7 +79,7 @@ object MavenArtifactProject {
     override def apply (id :Project.Id) = id match {
       case repoId :RepoId =>
         val af = Artifact(repoId)
-        if (Files.exists(af.sources)) Some(createProject(af))
+        if (Files.exists(af.sources)) Some(seed(af.sources, af :: Nil))
         else None
       case _ => None
     }
@@ -93,6 +91,6 @@ object MavenArtifactProject {
       val groupId = groupPath.toString.replace(File.separatorChar, '.')
       Artifact(RepoId(MavenRepo, groupId, artifactId, version))
     }
-    override protected def createProjectIn (root :Path) = createProject(rootToArtifact(root))
+    override protected def injectArgs (root :Path) = rootToArtifact(root) :: Nil
   }
 }
