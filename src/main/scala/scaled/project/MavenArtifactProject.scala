@@ -32,7 +32,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override def classes = af.classes
   override def depends = _depends.transitive :+ _depends.platformDepend
 
-  override protected def createProjectCodex () :ProjectCodex = new ProjectCodex(this) {
+  override protected def createIndexer () :Indexer = new Indexer(this) {
     import scala.collection.convert.WrapAsJava._
 
     val javac = new JavaExtractor() {
@@ -40,7 +40,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
     }
 
     // if our project store is empty, run an initial index immediately
-    if (!projectStore.topLevelDefs.iterator.hasNext) {
+    if (!project.store.topLevelDefs.iterator.hasNext) {
       // (TODO: queue this up so that we're only indexing one project at a time?)
       metaSvc.exec.runInBG { reindexAll() }
     }
@@ -49,7 +49,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
     def reindexAll () :Unit = synchronized {
       val sources = new ZipFile(root.toFile)
       println(s"Reindexing ${sources.size} java files in $root...")
-      javac.process(sources, projectStore.writer)
+      javac.process(sources, project.store.writer)
     }
 
     override protected def reindex (source :Source) :Unit = synchronized {
