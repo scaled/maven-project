@@ -35,26 +35,16 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override protected def createIndexer () :Indexer = new Indexer(this) {
     import scala.collection.convert.WrapAsJava._
 
-    val javac = new JavaExtractor() {
-      override def classpath = _depends.buildClasspath
-    }
-
-    // if our project store is empty, run an initial index immediately
-    if (!project.store.topLevelDefs.iterator.hasNext) {
-      // (TODO: queue this up so that we're only indexing one project at a time?)
-      metaSvc.exec.runInBG { reindexAll() }
-    }
-
-    // TODO: use Nexus or actors instead of this ham-fisted syncing
-    def reindexAll () :Unit = synchronized {
+    override protected def reindexAll () {
       val sources = new ZipFile(root.toFile)
       println(s"Reindexing ${sources.size} java files in $root...")
-      javac.process(sources, project.store.writer)
+      new JavaExtractor() {
+        override def classpath = _depends.buildClasspath
+      }.process(sources, project.store.writer)
     }
 
-    override protected def reindex (source :Source) :Unit = synchronized {
-      reindexComplete(source) // our metadata is always up to date
-    }
+    // our metadata is always up to date
+    override protected def reindex (source :Source) :Unit = reindexComplete(source)
   }
 
   // TODO: try to download our -sources file if it does not already exist
