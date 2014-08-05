@@ -45,8 +45,16 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     }
   }
 
-  override def sourceDirs :Seq[Path] = Seq(buildDir("sourceDirectory", "src/main"))
-  override def testSourceDirs :Seq[Path] = Seq(buildDir("testSourceDirectory", "src/test"))
+  override def sourceDirs :Seq[Path] =
+    allLangs(buildDir("sourceDirectory", "src/main/java"))
+  override def testSourceDirs :Seq[Path] =
+    allLangs(buildDir("testSourceDirectory", "src/test/java"))
+  private def allLangs (java :Path) :Seq[Path] = {
+    // if the java path is not of the form foo/java then we can't langify it
+    if (java.getFileName.toString != "java") Seq(java)
+    // otherwise turn foo/java into foo/scala, etc.
+    else (Seq(java) ++ Seq("scala").map(java.getParent.resolve(_))).filter(Files.exists(_))
+  }
 
   override def outputDir :Path = buildDir("outputDirectory", "target/classes")
   override def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
