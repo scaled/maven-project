@@ -31,6 +31,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override def ids = Seq(id)
   override def classes = af.classes
   override def depends = _depends.transitive :+ _depends.platformDepend
+  override def execClasspath :Seq[Path] = classes +: _depends.execClasspath
 
   override protected def createIndexer () :Indexer = new Indexer(this) {
     import scala.collection.convert.WrapAsJava._
