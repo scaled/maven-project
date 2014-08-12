@@ -37,11 +37,19 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
     import scala.collection.convert.WrapAsJava._
 
     override protected def reindexAll () {
-      val sources = new ZipFile(root.toFile)
-      println(s"Reindexing ${sources.size} java files in $root...")
-      new JavaExtractor() {
-        override def classpath = _depends.buildClasspath
-      }.process(sources, project.store.writer)
+      // if our sources don't exist, try to download them
+      if (!Files.exists(root)) {
+        println(s"Attemping to fetch sources: $root...")
+        pspace.msvc.service[MavenService].fetchSources(af.repoId)
+      }
+
+      if (Files.exists(root)) {
+        val sources = new ZipFile(root.toFile)
+        println(s"Reindexing ${sources.size} java files in $root...")
+        new JavaExtractor() {
+          override def classpath = _depends.buildClasspath
+        }.process(sources, project.store.writer)
+      }
     }
 
     // our metadata is always up to date
@@ -68,10 +76,9 @@ object MavenArtifactProject {
     override def checkRoot (root :Path) :Int = if (isJar(root) && isInM2Repo(root)) 1 else -1
 
     override def apply (id :Project.Id) = id match {
-      case repoId :RepoId =>
+      case repoId @ RepoId(MavenRepo, _, _, _) =>
         val af = Artifact(repoId)
-        if (Files.exists(af.sources)) Some(seed(af.sources, af :: Nil))
-        else None
+        Some(seed(af.sources, af :: Nil))
       case _ => None
     }
 
