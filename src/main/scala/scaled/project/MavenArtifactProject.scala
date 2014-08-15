@@ -17,7 +17,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
 
   private def id = af.repoId
   private val _pom = POM.fromFile(af.pom.toFile) getOrElse {
-    throw new IllegalArgumentException("Unable to load ${af.pom}")
+    throw new IllegalArgumentException(s"Unable to load ${af.pom}")
   }
   private val _depends = new Depends(pspace) {
     def pom = _pom
