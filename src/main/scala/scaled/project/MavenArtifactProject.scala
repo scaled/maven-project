@@ -78,7 +78,8 @@ object MavenArtifactProject {
     override def apply (id :Project.Id) = id match {
       case repoId @ RepoId(MavenRepo, _, _, _) =>
         val af = Artifact(repoId)
-        Some(seed(af.sources, af :: Nil))
+        if (Files.exists(af.pom)) Some(seed(af.sources, af :: Nil))
+        else None
       case _ => None
     }
 
