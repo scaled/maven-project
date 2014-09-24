@@ -14,7 +14,7 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
 
   private val pomFile = root.resolve("pom.xml")
   private var _pom = POM.fromFile(pomFile.toFile) getOrElse {
-    throw new IllegalArgumentException("Unable to load $pomFile")
+    throw new IllegalArgumentException(s"Unable to load $pomFile")
   }
   def pom = _pom
 
