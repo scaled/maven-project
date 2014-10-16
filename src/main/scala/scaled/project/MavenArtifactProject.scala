@@ -34,8 +34,6 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override def execClasspath :Seq[Path] = classes +: _depends.execClasspath
 
   override protected def createIndexer () :Indexer = new Indexer(this) {
-    import scala.collection.convert.WrapAsJava._
-
     override protected def reindexAll () {
       // if our sources don't exist, try to download them
       if (!Files.exists(root)) {

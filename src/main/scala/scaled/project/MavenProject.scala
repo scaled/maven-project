@@ -20,15 +20,13 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
 
   // watch the POM file for changes, if it does change, hibernate which will cause is to reload
   // everything when we're next referenced
-  metaSvc.service[WatchService].watchFile(pomFile, file => {
-    POM.fromFile(file.toFile) match {
-      case None =>
-        metaSvc.log.log(s"$name: auto-reload failed: $file")
-      case Some(pom) =>
-        metaSvc.log.log(s"$name: auto-reloded: $file")
-        hibernate()
-        _pom = pom
-    }
+  metaSvc.service[WatchService].watchFile(pomFile, file => POM.fromFile(file.toFile) match {
+    case SNone =>
+      metaSvc.log.log(s"$name: auto-reload failed: $file")
+    case SSome(pom) =>
+      metaSvc.log.log(s"$name: auto-reloded: $file")
+      hibernate()
+      _pom = pom
   })
   // note that we don't 'close' our watch, we'll keep it active for the lifetime of the editor
   // because it's low overhead; I may change my mind on this front later, hence this note
@@ -40,7 +38,7 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
 
   private def pomSrcId = {
     def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
-    pom.scm.connection map(stripSCM(_).split(":", 2)) collect {
+    Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
       case Array(vcs, url) => SrcURL(vcs, url)
     }
   }
@@ -71,8 +69,8 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     override def javacOpts = {
       // look for source/target configuration
       val cps = pom.plugin("org.apache.maven.plugins", "maven-compiler-plugin")
-      cps.flatMap(_.configValue("source")).takeRight(1).flatMap(List("-source", _)) ++
-      cps.flatMap(_.configValue("target")).takeRight(1).flatMap(List("-target", _))
+      cps.flatMap(_.configValue("source")).takeRight(1).fromScala.flatMap(List("-source", _)) ++
+      cps.flatMap(_.configValue("target")).takeRight(1).fromScala.flatMap(List("-target", _))
     }
     // override def scalacOpts :Seq[String] = Seq()
 
