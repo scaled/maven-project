@@ -54,8 +54,9 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     else (Seq(java) ++ Seq("scala").map(java.getParent.resolve(_))).filter(Files.exists(_))
   }
 
-  override def outputDir :Path = buildDir("outputDirectory", "target/classes")
-  override def testOutputDir :Path = buildDir("testOutputDirectory", "target/test-classes")
+  private val targetDir = pom.buildProps.getOrElse("directory", "target")
+  override def outputDir :Path = buildDir("outputDirectory", s"$targetDir/classes")
+  override def testOutputDir :Path = buildDir("testOutputDirectory", s"$targetDir/test-classes")
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
   override protected def createCompiler () = new ScalaCompiler(this) {
