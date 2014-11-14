@@ -54,9 +54,10 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     else (Seq(java) ++ Seq("scala").map(java.getParent.resolve(_))).filter(Files.exists(_))
   }
 
-  private val targetDir = pom.buildProps.getOrElse("directory", "target")
-  override def outputDir :Path = buildDir("outputDirectory", s"$targetDir/classes")
-  override def testOutputDir :Path = buildDir("testOutputDirectory", s"$targetDir/test-classes")
+  private def targetPre = pom.buildProps.getOrElse("directory", "target")
+  private def targetDir = buildDir("directory", "target")
+  override def outputDir :Path = buildDir("outputDirectory", s"$targetPre/classes")
+  override def testOutputDir :Path = buildDir("testOutputDirectory", s"$targetPre/test-classes")
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
   override protected def createCompiler () = new ScalaCompiler(this) {
@@ -90,7 +91,10 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     }
   }
 
-  override protected def ignores = MavenProject.mavenIgnores
+  override protected def ignore (dir :Path) :Boolean = {
+    super.ignore(dir) || (dir == targetDir) || (dir == outputDir) || (dir == testOutputDir)
+  }
+
   override protected def buildDependClasspath = _depends.buildClasspath
   override protected def testDependClasspath = _depends.testClasspath
   override protected def execDependClasspath = _depends.execClasspath
@@ -103,9 +107,6 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
 }
 
 object MavenProject {
-
-  // TODO: don't do things this way, determine the classes directory from the POM, etc.
-  val mavenIgnores = FileProject.stockIgnores ++ Set("target")
 
   @Plugin(tag="project-finder")
   class FinderPlugin extends ProjectFinderPlugin("maven", true, classOf[MavenProject]) {
