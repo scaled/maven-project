@@ -51,7 +51,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
     }
 
     // our metadata is always up to date
-    override protected def reindex (source :Source) :Unit = reindexComplete(source)
+    override protected def reindex (source :Source, force :Boolean) :Unit = reindexComplete(source)
   }
 
   // TODO: try to download our -sources file if it does not already exist
