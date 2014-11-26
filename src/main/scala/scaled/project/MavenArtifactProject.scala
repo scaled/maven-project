@@ -4,7 +4,7 @@
 
 package scaled.project
 
-import codex.extract.JavaExtractor
+import codex.extract.{JavaExtractor, TokenExtractor, ZipUtils}
 import codex.model.Source
 import java.io.File
 import java.nio.file.{Files, Path}
@@ -43,10 +43,20 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
 
       if (Files.exists(root)) {
         val sources = new ZipFile(root.toFile)
-        println(s"Reindexing ${sources.size} java files in $root...")
-        new JavaExtractor() {
-          override def classpath = _depends.buildClasspath
-        }.process(sources, project.store.writer)
+        val exts = ZipUtils.summarizeSources(sources)
+
+        if (exts.count("java") > 0) {
+          println(s"Reindexing ${exts.count("java")} java files in $root...")
+          new JavaExtractor() {
+            override def classpath = _depends.buildClasspath
+          }.process(sources, ZipUtils.ofSuff(".java"), project.store.writer)
+        }
+
+        if (exts.count("scala") > 0) {
+          println(s"Reindexing ${exts.count("scala")} scala files in $root...")
+          new TokenExtractor().process(
+            root, sources, ZipUtils.ofSuff(".scala"), project.store.writer)
+        }
       }
     }
 
