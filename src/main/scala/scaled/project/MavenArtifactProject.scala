@@ -46,14 +46,14 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
         val exts = ZipUtils.summarizeSources(sources)
 
         if (exts.count("java") > 0) {
-          println(s"Reindexing ${exts.count("java")} java files in $root...")
+          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("java")} java files in $root...")
           new JavaExtractor() {
             override def classpath = _depends.buildClasspath
           }.process(sources, ZipUtils.ofSuff(".java"), project.store.writer)
         }
 
         if (exts.count("scala") > 0) {
-          println(s"Reindexing ${exts.count("scala")} scala files in $root...")
+          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("scala")} scala files in $root...")
           new TokenExtractor().process(
             root, sources, ZipUtils.ofSuff(".scala"), project.store.writer)
         }
