@@ -9,10 +9,13 @@ import pomutil.POM
 import scaled._
 import scaled.pacman.Filez
 
-class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProject(ps) {
+class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJavaProject(ps) {
   import Project._
 
-  private val pomFile = root.resolve("pom.xml")
+  private def isMain = !root.testMode
+  private def name (isMain :Boolean) = pom.artifactId + (if (isMain) "" else "-test")
+
+  private val pomFile = root.path.resolve("pom.xml")
   private var _pom = POM.fromFile(pomFile.toFile) getOrElse {
     throw new IllegalArgumentException(s"Unable to load $pomFile")
   }
@@ -31,9 +34,13 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
   // note that we don't 'close' our watch, we'll keep it active for the lifetime of the editor
   // because it's low overhead; I may change my mind on this front later, hence this note
 
-  override def name = pom.artifactId
-  override def idName = s"mvn-${pom.groupId}_${pom.artifactId}_${pom.version}"
+  override def name = name(isMain)
+  override def idName = s"mvn-${pom.groupId}_${name}_${pom.version}"
   override def ids = Seq(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)) ++ pomSrcId
+  override def testSeed = if (!isMain) None else {
+    val troot = Project.Root(root.path, true)
+    Some(Project.Seed(troot, name(false), true, getClass, List(troot)))
+  }
   override def depends = _depends.transitive :+ _depends.platformDepend
 
   private def pomSrcId = {
@@ -43,10 +50,10 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     }
   }
 
-  override def sourceDirs :Seq[Path] =
-    allLangs(buildDir("sourceDirectory", "src/main/java"))
-  override def testSourceDirs :Seq[Path] =
-    allLangs(buildDir("testSourceDirectory", "src/test/java"))
+  private def mainSourceDirs = allLangs(buildDir("sourceDirectory", "src/main/java"))
+  private def testSourceDirs = allLangs(buildDir("testSourceDirectory", "src/test/java"))
+  override def sourceDirs :Seq[Path] = if (isMain) mainSourceDirs else testSourceDirs
+
   private def allLangs (java :Path) :Seq[Path] = {
     // if the java path is not of the form foo/java then we can't langify it
     if (java.getFileName.toString != "java") Seq(java)
@@ -56,17 +63,16 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
 
   private def targetPre = pom.buildProps.getOrElse("directory", "target")
   private def targetDir = buildDir("directory", "target")
-  override def outputDir :Path = buildDir("outputDirectory", s"$targetPre/classes")
-  override def testOutputDir :Path = buildDir("testOutputDirectory", s"$targetPre/test-classes")
+
+  private def mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
+  private def testOutputDir = buildDir("testOutputDirectory", s"$targetPre/test-classes")
+  override def outputDir :Path = if (isMain) mainOutputDir else testOutputDir
 
   // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
   override protected def createCompiler () = new ScalaCompiler(this) {
     override def sourceDirs = MavenProject.this.sourceDirs
     override def buildClasspath = MavenProject.this.buildClasspath
     override def outputDir = MavenProject.this.outputDir
-    override def testSourceDirs = MavenProject.this.testSourceDirs
-    override def testClasspath = MavenProject.this.testClasspath
-    override def testOutputDir = MavenProject.this.testOutputDir
 
     override def javacOpts = {
       // look for source/target configuration
@@ -76,9 +82,8 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     }
     // override def scalacOpts :Seq[String] = Seq()
 
-    override protected def willCompile (tests :Boolean) {
-      if (tests) pom.testResources foreach copyResources(testOutputDir)
-      else pom.resources foreach copyResources(outputDir)
+    override protected def willCompile () {
+      pom.resources foreach copyResources(outputDir)
     }
   }
 
@@ -86,24 +91,24 @@ class MavenProject (val root :Path, ps :ProjectSpace) extends AbstractJavaProjec
     if (rsrc.targetPath.isDefined || rsrc.filtering || !rsrc.includes.isEmpty ||
         !rsrc.excludes.isEmpty) metaSvc.log.log("Complex <resources> not yet supported " + rsrc)
     else {
-      val rsrcDir = root.resolve(rsrc.directory)
+      val rsrcDir = root.path.resolve(rsrc.directory)
       if (Files.exists(rsrcDir)) Filez.copyAll(rsrcDir, target)
     }
   }
 
   override protected def ignore (dir :Path) :Boolean = {
-    super.ignore(dir) || (dir == targetDir) || (dir == outputDir) || (dir == testOutputDir)
+    super.ignore(dir) || (dir == targetDir) || (dir == outputDir)
   }
 
-  override protected def buildDependClasspath = _depends.buildClasspath
-  override protected def testDependClasspath = _depends.testClasspath
+  override protected def buildDependClasspath =
+    if (isMain) _depends.buildClasspath else mainOutputDir +: _depends.testClasspath
   override protected def execDependClasspath = _depends.execClasspath
 
   private val _depends = new Depends(pspace) {
     def pom = _pom
   }
   private def buildDir (key :String, defpath :String) :Path =
-    root.resolve(pom.buildProps.getOrElse(key, defpath))
+    root.path.resolve(pom.buildProps.getOrElse(key, defpath))
 }
 
 object MavenProject {
@@ -111,5 +116,11 @@ object MavenProject {
   @Plugin(tag="project-finder")
   class FinderPlugin extends ProjectFinderPlugin("maven", true, classOf[MavenProject]) {
     def checkRoot (root :Path) :Int = if (exists(root, "pom.xml")) 1 else -1
+    override protected def mkRoot (seed :Path, path :Path) = {
+      val ppath = path.relativize(seed)
+      // TODO: really we need to read the POM, look for testSourceDir and check whether we're
+      // inside there, but jesus fuck I can't be bothered at the moment
+      Project.Root(path, ppath.exists(_.getFileName.toString == "test"))
+    }
   }
 }

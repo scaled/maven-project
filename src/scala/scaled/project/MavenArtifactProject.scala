@@ -23,7 +23,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
     def pom = _pom
   }
 
-  override val root = af.sources
+  override val root = Project.Root(af.sources, false)
   override val zipPaths = Seq(af.sources)
   override def isIncidental = true
   override def name = s"${id.artifactId}:${id.version}"
@@ -36,26 +36,27 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override protected def createIndexer () :Indexer = new Indexer(this) {
     override protected def reindexAll () {
       // if our sources don't exist, try to download them
-      if (!Files.exists(root)) {
-        println(s"Attemping to fetch sources: $root...")
+      val rpath = root.path
+      if (!Files.exists(rpath)) {
+        println(s"Attemping to fetch sources: $rpath...")
         pspace.msvc.service[MavenService].fetchSources(af.repoId)
       }
 
-      if (Files.exists(root)) {
-        val sources = new ZipFile(root.toFile)
+      if (Files.exists(rpath)) {
+        val sources = new ZipFile(rpath.toFile)
         val exts = ZipUtils.summarizeSources(sources)
 
         if (exts.count("java") > 0) {
-          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("java")} java files in $root...")
+          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("java")} java files in $rpath...")
           new JavaExtractor() {
             override def classpath = _depends.buildClasspath
           }.process(sources, ZipUtils.ofSuff(".java"), project.store.writer)
         }
 
         if (exts.count("scala") > 0) {
-          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("scala")} scala files in $root...")
+          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("scala")} scala files in $rpath...")
           new TokenExtractor().process(
-            root, sources, ZipUtils.ofSuff(".scala"), project.store.writer)
+            rpath, sources, ZipUtils.ofSuff(".scala"), project.store.writer)
         }
       }
     }
@@ -86,7 +87,7 @@ object MavenArtifactProject {
     override def apply (id :Project.Id) = id match {
       case repoId @ RepoId(MavenRepo, _, _, _) =>
         val af = Artifact(repoId)
-        if (Files.exists(af.pom)) Some(seed(af.sources, af :: Nil))
+        if (Files.exists(af.pom)) Some(seed(Root(af.sources, false), af :: Nil))
         else None
       case _ => None
     }
@@ -98,6 +99,6 @@ object MavenArtifactProject {
       val groupId = groupPath.toString.replace(File.separatorChar, '.')
       Artifact(RepoId(MavenRepo, groupId, artifactId, version))
     }
-    override protected def injectArgs (root :Path) = rootToArtifact(root) :: Nil
+    override protected def injectArgs (root :Root) = rootToArtifact(root.path) :: Nil
   }
 }
