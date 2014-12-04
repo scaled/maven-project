@@ -4,7 +4,7 @@
 
 package scaled.project
 
-import codex.extract.{JavaExtractor, TokenExtractor, ZipUtils}
+import codex.extract.{SourceSet, ZipUtils}
 import codex.model.Source
 import java.io.File
 import java.nio.file.{Files, Path}
@@ -31,38 +31,25 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override def ids = Seq(id)
   override def classes = af.classes
   override def depends = _depends.transitive :+ _depends.platformDepend
+  override def buildClasspath :Seq[Path] = _depends.buildClasspath
   override def execClasspath :Seq[Path] = classes +: _depends.execClasspath
 
-  override protected def createIndexer () :Indexer = new Indexer(this) {
-    override protected def reindexAll () {
-      // if our sources don't exist, try to download them
-      val rpath = root.path
-      if (!Files.exists(rpath)) {
-        println(s"Attemping to fetch sources: $rpath...")
-        pspace.msvc.service[MavenService].fetchSources(af.repoId)
-      }
-
-      if (Files.exists(rpath)) {
-        val sources = new ZipFile(rpath.toFile)
-        val exts = ZipUtils.summarizeSources(sources)
-
-        if (exts.count("java") > 0) {
-          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("java")} java files in $rpath...")
-          new JavaExtractor() {
-            override def classpath = _depends.buildClasspath
-          }.process(sources, ZipUtils.ofSuff(".java"), project.store.writer)
-        }
-
-        if (exts.count("scala") > 0) {
-          ps.wspace.statusMsg.emit(s"Reindexing ${exts.count("scala")} scala files in $rpath...")
-          new TokenExtractor().process(
-            rpath, sources, ZipUtils.ofSuff(".scala"), project.store.writer)
-        }
-      }
+  override def summarizeSources = {
+    // if our sources don't exist, try to download them
+    val rpath = root.path
+    if (!Files.exists(rpath)) {
+      pspace.wspace.statusMsg.emit(s"Attemping to fetch sources: $rpath...")
+      pspace.msvc.service[MavenService].fetchSources(af.repoId)
     }
 
-    // our metadata is always up to date
-    override protected def reindex (source :Source, force :Boolean) :Unit = reindexComplete(source)
+    val mb = Map.builder[String,SourceSet]()
+    if (Files.exists(rpath)) {
+      val sources = new ZipFile(rpath.toFile)
+      ZipUtils.summarizeSources(sources) foreach { suff =>
+        mb += (suff, new SourceSet.Archive(rpath, ZipUtils.ofSuff("."+suff)))
+      }
+    }
+    mb.build()
   }
 
   // TODO: try to download our -sources file if it does not already exist
