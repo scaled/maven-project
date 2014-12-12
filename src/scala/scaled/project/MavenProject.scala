@@ -83,7 +83,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     // override def scalacOpts :Seq[String] = Seq()
 
     override protected def willCompile () {
-      pom.resources foreach copyResources(outputDir)
+      (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
     }
   }
 
