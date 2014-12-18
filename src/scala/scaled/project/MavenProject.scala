@@ -21,17 +21,22 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
   }
   def pom = _pom
 
-  // watch the POM file for changes, if it does change, hibernate which will cause is to reload
-  // everything when we're next referenced
-  metaSvc.service[WatchService].watchFile(pomFile, file => POM.fromFile(file.toFile) match {
-    case SNone =>
-      metaSvc.log.log(s"$name: auto-reload failed: $file")
-    case SSome(pom) =>
-      metaSvc.log.log(s"$name: auto-reloded: $file")
-      hibernate()
-      _pom = pom
-  })
-  // note that we don't 'close' our watch, we'll keep it active for the lifetime of the editor
+  // watch the POM file and any local parents for changes
+  watchPOM(pom)
+  private def watchPOM (pom :POM) :Unit = {
+    def reload (unused :Path) = POM.fromFile(pomFile.toFile) match {
+      case SNone =>
+        metaSvc.log.log(s"$name: auto-reload failed: $pomFile")
+      case SSome(pom) =>
+        metaSvc.log.log(s"$name: auto-reloded: $pomFile")
+        hibernate()
+        _pom = pom
+    }
+    def watch (file :Path) = { metaSvc.service[WatchService].watchFile(file, reload) }
+    pom.file foreach { f => watch(f.toPath) }
+    pom.parent foreach { watchPOM }
+  }
+  // note that we don't 'close' our watches, we'll keep them active for the lifetime of the editor
   // because it's low overhead; I may change my mind on this front later, hence this note
 
   override def name = name(isMain)
