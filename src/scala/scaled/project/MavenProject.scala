@@ -41,12 +41,26 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 
   override def name = name(isMain)
   override def idName = s"mvn-${pom.groupId}_${name}_${pom.version}"
-  override def ids = Seq(RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)) ++ pomSrcId
+  override def ids = {
+    val ids = Seq.builder[Id]()
+    // TODO: we could have our RepoId support a classifier and have our id be classified as tests
+    // for the test sub-project, but for now we just use artifactId-test
+    ids += RepoId(MavenRepo, pom.groupId, name, pom.version)
+    if (isMain) ids ++= pomSrcId
+    ids.build()
+  }
   override def testSeed = if (!isMain) None else {
     val troot = Project.Root(root.path, true)
     Some(Project.Seed(troot, name(false), true, getClass, List(troot)))
   }
-  override def depends = _depends.transitive :+ _depends.platformDepend
+  override def depends = {
+    val deps = Seq.builder[Id]
+    // if this is the test subproject, add a depend on the main project
+    if (!isMain) deps += RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)
+    deps ++= _depends.transitive
+    deps += _depends.platformDepend
+    deps.build()
+  }
 
   private def pomSrcId = {
     def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
