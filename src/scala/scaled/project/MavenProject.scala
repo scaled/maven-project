@@ -8,6 +8,7 @@ import java.nio.file.{Files, Path}
 import pomutil.POM
 import scaled._
 import scaled.pacman.Filez
+import scaled.util.BufferBuilder
 
 class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJavaProject(ps) {
   import Project._
@@ -83,6 +84,13 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
   private def targetPre = pom.buildProps.getOrElse("directory", "target")
   private def targetDir = buildDir("directory", "target")
 
+  override protected def describeBuild (bb :BufferBuilder) {
+    super.describeBuild(bb)
+
+    bb.addSection("Compiler options:")
+    bb.addKeyValue("javac: ", javacOpts.mkString(" "))
+  }
+
   private def mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
   private def testOutputDir = buildDir("testOutputDirectory", s"$targetPre/test-classes")
   override def outputDir :Path = if (isMain) mainOutputDir else testOutputDir
@@ -93,17 +101,22 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     override def buildClasspath = MavenProject.this.buildClasspath
     override def outputDir = MavenProject.this.outputDir
 
-    override def javacOpts = {
-      // look for source/target configuration
-      val cps = pom.plugin("org.apache.maven.plugins", "maven-compiler-plugin")
-      cps.flatMap(_.configValue("source")).takeRight(1).fromScala.flatMap(List("-source", _)) ++
-      cps.flatMap(_.configValue("target")).takeRight(1).fromScala.flatMap(List("-target", _))
-    }
+    override def javacOpts = MavenProject.this.javacOpts
     // override def scalacOpts :Seq[String] = Seq()
 
     override protected def willCompile () {
       (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
     }
+  }
+
+  private def javacOpts :Seq[String] = {
+    // this returns 0-N Plugin instances (one for each POM in the parent chain)
+    val cps  = pom.plugin("org.apache.maven.plugins", "maven-compiler-plugin")
+    // look for source/target configuration
+    cps.flatMap(_.configValue("source")).takeRight(1).fromScala.flatMap(List("-source", _)) ++
+      cps.flatMap(_.configValue("target")).takeRight(1).fromScala.flatMap(List("-target", _)) ++
+      // also look for <compilerArgs> sections
+      cps.flatMap(_.configList("compilerArgs", "arg")).fromScala
   }
 
   private def copyResources (target :Path)(rsrc :POM.Resource) {
