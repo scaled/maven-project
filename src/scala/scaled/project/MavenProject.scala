@@ -89,6 +89,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 
     bb.addSection("Compiler options:")
     bb.addKeyValue("javac: ", javacOpts.mkString(" "))
+    bb.addKeyValue("scalac: ", scalacOpts.mkString(" "))
   }
 
   private def mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
@@ -102,7 +103,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     override def outputDir = MavenProject.this.outputDir
 
     override def javacOpts = MavenProject.this.javacOpts
-    // override def scalacOpts :Seq[String] = Seq()
+    override def scalacOpts :Seq[String] = MavenProject.this.scalacOpts
 
     override protected def willCompile () {
       (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
@@ -117,6 +118,13 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
       cps.flatMap(_.configValue("target")).takeRight(1).fromScala.flatMap(List("-target", _)) ++
       // also look for <compilerArgs> sections
       cps.flatMap(_.configList("compilerArgs", "arg")).fromScala
+  }
+
+  private def scalacOpts :Seq[String] = {
+    // this returns 0-N Plugin instances (one for each POM in the parent chain)
+    val cps  = pom.plugin("org.scala-tools", "maven-scala-plugin")
+    // also look for <configuration>/<args> sections
+    cps.flatMap(_.configList("args", "arg")).fromScala
   }
 
   private def copyResources (target :Path)(rsrc :POM.Resource) {
