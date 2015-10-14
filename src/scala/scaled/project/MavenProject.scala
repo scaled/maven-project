@@ -90,6 +90,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     bb.addSection("Compiler options:")
     bb.addKeyValue("javac: ", javacOpts.mkString(" "))
     bb.addKeyValue("scalac: ", scalacOpts.mkString(" "))
+    bb.addKeyValue("scvers: ", scalacVers)
   }
 
   private def mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
@@ -104,6 +105,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 
     override def javacOpts = MavenProject.this.javacOpts
     override def scalacOpts :Seq[String] = MavenProject.this.scalacOpts
+    override def scalacVers = MavenProject.this.scalacVers
 
     override protected def willCompile () {
       (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
@@ -126,6 +128,10 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     // also look for <configuration>/<args> sections
     cps.flatMap(_.configList("args", "arg")).fromScala
   }
+
+  private def scalacVers :String = (depends collectFirst {
+    case RepoId(_, "org.scala-lang", "scala-library", version) => version
+  }) getOrElse MavenProject.DefaultScalacVersion
 
   private def copyResources (target :Path)(rsrc :POM.Resource) {
     if (rsrc.targetPath.isDefined || rsrc.filtering || !rsrc.includes.isEmpty ||
@@ -152,6 +158,8 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 }
 
 object MavenProject {
+
+  val DefaultScalacVersion = "2.11.2"
 
   @Plugin(tag="project-finder")
   class FinderPlugin extends ProjectFinderPlugin("maven", true, classOf[MavenProject]) {
