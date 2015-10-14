@@ -123,10 +123,12 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
   }
 
   private def scalacOpts :Seq[String] = {
-    // this returns 0-N Plugin instances (one for each POM in the parent chain)
-    val cps  = pom.plugin("org.scala-tools", "maven-scala-plugin")
-    // also look for <configuration>/<args> sections
-    cps.flatMap(_.configList("args", "arg")).fromScala
+    // look for info from either maven-scala or scala-maven plugins
+    val msp = pom.plugin("org.scala-tools", "maven-scala-plugin")
+    val smp = pom.plugin("net.alchim31.maven", "scala-maven-plugin")
+    // the above returns info for every POM up the chain of parents, so we flatten any config
+    // directives we find therein into one
+    (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
   }
 
   private def scalacVers :String = (depends collectFirst {
