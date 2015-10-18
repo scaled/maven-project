@@ -133,7 +133,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 
   private def scalacVers :String = (depends collectFirst {
     case RepoId(_, "org.scala-lang", "scala-library", version) => version
-  }) getOrElse MavenProject.DefaultScalacVersion
+  }) getOrElse ScalaCompiler.DefaultScalacVersion
 
   private def copyResources (target :Path)(rsrc :POM.Resource) {
     if (rsrc.targetPath.isDefined || rsrc.filtering || !rsrc.includes.isEmpty ||
@@ -160,8 +160,6 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 }
 
 object MavenProject {
-
-  val DefaultScalacVersion = "2.11.2"
 
   @Plugin(tag="project-finder")
   class FinderPlugin extends ProjectFinderPlugin("maven", true, classOf[MavenProject]) {
