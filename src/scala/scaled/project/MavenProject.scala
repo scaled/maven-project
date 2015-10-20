@@ -10,7 +10,8 @@ import scaled._
 import scaled.pacman.Filez
 import scaled.util.BufferBuilder
 
-class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJavaProject(ps) {
+class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJavaProject(ps)
+    with ScalaProject {
   import Project._
 
   private def isMain = !root.testMode
@@ -63,6 +64,15 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     deps.build()
   }
 
+  override def scalacOpts :Seq[String] = {
+    // look for info from either maven-scala or scala-maven plugins
+    val msp = pom.plugin("org.scala-tools", "maven-scala-plugin")
+    val smp = pom.plugin("net.alchim31.maven", "scala-maven-plugin")
+    // the above returns info for every POM up the chain of parents, so we flatten any config
+    // directives we find therein into one
+    (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
+  }
+
   private def pomSrcId = {
     def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
     Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
@@ -104,7 +114,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     override def outputDir = MavenProject.this.outputDir
 
     override def javacOpts = MavenProject.this.javacOpts
-    override def scalacOpts :Seq[String] = MavenProject.this.scalacOpts
+    override def scalacOpts = MavenProject.this.scalacOpts
     override def scalacVers = MavenProject.this.scalacVers
 
     override protected def willCompile () {
@@ -120,15 +130,6 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
       cps.flatMap(_.configValue("target")).takeRight(1).fromScala.flatMap(List("-target", _)) ++
       // also look for <compilerArgs> sections
       cps.flatMap(_.configList("compilerArgs", "arg")).fromScala
-  }
-
-  private def scalacOpts :Seq[String] = {
-    // look for info from either maven-scala or scala-maven plugins
-    val msp = pom.plugin("org.scala-tools", "maven-scala-plugin")
-    val smp = pom.plugin("net.alchim31.maven", "scala-maven-plugin")
-    // the above returns info for every POM up the chain of parents, so we flatten any config
-    // directives we find therein into one
-    (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
   }
 
   private def scalacVers :String = (depends collectFirst {
