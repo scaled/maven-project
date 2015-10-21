@@ -57,9 +57,12 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
   }
   override def depends = {
     val deps = Seq.builder[Id]
-    // if this is the test subproject, add a depend on the main project
-    if (!isMain) deps += RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)
-    deps ++= _depends.transitive
+    if (isMain) deps ++= _depends.buildTransitive
+    else {
+      // if this is the test subproject, add a depend on the main project
+      deps += RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)
+      deps ++= _depends.testTransitive
+    }
     deps += _depends.platformDepend
     deps.build()
   }

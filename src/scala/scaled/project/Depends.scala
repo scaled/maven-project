@@ -16,9 +16,13 @@ abstract class Depends (pspace :ProjectSpace) {
   /** Returns the POM we use to resolve depends. */
   def pom :POM
 
-  /** Resolves depends for [[pom]], using `pspace` to resolve projects known to Scaled in lieu
+  /** Resolves build (main) depends for [[pom]], using `pspace` to resolve projects known to Scaled
+    * in lieu of artifacts in the local Maven repo. */
+  def buildTransitive :Seq[Project.Id] = transitiveDepends(DependResolver.Compile) flatMap(toId)
+
+  /** Resolves test depends for [[pom]], using `pspace` to resolve projects known to Scaled in lieu
     * of artifacts in the local Maven repo. */
-  def transitive :Seq[Project.Id] = transitiveDepends(DependResolver.Compile) flatMap(toId)
+  def testTransitive :Seq[Project.Id] = transitiveDepends(DependResolver.Test) flatMap(toId)
 
   def buildClasspath = classpath(DependResolver.Compile)
   def testClasspath = classpath(DependResolver.Test)

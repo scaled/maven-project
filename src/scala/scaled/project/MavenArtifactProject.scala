@@ -30,7 +30,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override def idName = s"mvn-${id.groupId}_${id.artifactId}_${id.version}"
   override def ids = Seq(id)
   override def classes = af.classes
-  override def depends = _depends.transitive :+ _depends.platformDepend
+  override def depends = _depends.buildTransitive :+ _depends.platformDepend
   override def buildClasspath :Seq[Path] = _depends.buildClasspath
   override def execClasspath :Seq[Path] = classes +: _depends.execClasspath
 
