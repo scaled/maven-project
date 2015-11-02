@@ -76,13 +76,6 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
   }
 
-  def kotlincOpts :Seq[String] = {
-    // this above returns info for every POM up the chain of parents, so we flatten any config
-    // directives we find therein into one
-    pom.plugin("org.jetbrains.kotlin", "kotlin-maven-plugin").
-      flatMap(_.configList("args", "arg")).fromScala
-  }
-
   private def pomSrcId = {
     def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
     Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
@@ -98,20 +91,12 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     // if the java path is not of the form foo/java then we can't langify it
     if (java.getFileName.toString != "java") Seq(java)
     // otherwise turn foo/java into foo/scala, etc.
-    else (Seq(java) ++ Seq("scala").map(java.getParent.resolve(_))).filter(Files.exists(_))
+    else (Seq(java) ++ Seq("scala", "kotlin", "kt").map(java.getParent.resolve(_))).
+      filter(Files.exists(_))
   }
 
   private def targetPre = pom.buildProps.getOrElse("directory", "target")
   private def targetDir = buildDir("directory", "target")
-
-  override protected def describeBuild (bb :BufferBuilder) {
-    super.describeBuild(bb)
-
-    bb.addSection("Compiler options:")
-    bb.addKeyValue("javac: ", javacOpts.mkString(" "))
-    bb.addKeyValue("scalac: ", scalacOpts.mkString(" "))
-    bb.addKeyValue("scvers: ", scalacVers)
-  }
 
   private def mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
   private def testOutputDir = buildDir("testOutputDirectory", s"$targetPre/test-classes")
@@ -151,6 +136,13 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 
   private def copyResources () {
     (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
+  }
+
+  private def kotlincOpts :Seq[String] = {
+    // this above returns info for every POM up the chain of parents, so we flatten any config
+    // directives we find therein into one
+    pom.plugin("org.jetbrains.kotlin", "kotlin-maven-plugin").
+      flatMap(_.configList("args", "arg")).fromScala
   }
 
   private def javacOpts :Seq[String] = {
