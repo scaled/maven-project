@@ -76,6 +76,13 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
   }
 
+  def kotlincOpts :Seq[String] = {
+    // this above returns info for every POM up the chain of parents, so we flatten any config
+    // directives we find therein into one
+    pom.plugin("org.jetbrains.kotlin", "kotlin-maven-plugin").
+      flatMap(_.configList("args", "arg")).fromScala
+  }
+
   private def pomSrcId = {
     def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
     Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
@@ -110,19 +117,40 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
   private def testOutputDir = buildDir("testOutputDirectory", s"$targetPre/test-classes")
   override def outputDir :Path = if (isMain) mainOutputDir else testOutputDir
 
-  // TODO: use summarizeSources to determine whether to use a Java or Scala compiler
-  override protected def createCompiler () = new ScalaCompiler(this) {
-    override def sourceDirs = MavenProject.this.sourceDirs
-    override def buildClasspath = MavenProject.this.buildClasspath
-    override def outputDir = MavenProject.this.outputDir
+  override protected def createCompiler () = {
+    val ssum = summarizeSources
 
-    override def javacOpts = MavenProject.this.javacOpts
-    override def scalacOpts = MavenProject.this.scalacOpts
-    override def scalacVers = MavenProject.this.scalacVers
+    // TODO: do we want to try to support multi-lingual projects? that sounds like a giant PITA,
+    // but we could probably at least generate a warning if we have some crazy mishmash of sources
 
-    override protected def willCompile () {
-      (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
+    // TEMP: if we have any Kotlin files, we just use the KotlinCompiler
+    if (ssum.contains("kt")) new KotlinCompiler(this) {
+      // TODO: this is a lot of annoying duplication...
+      override def sourceDirs = MavenProject.this.sourceDirs
+      override def buildClasspath = MavenProject.this.buildClasspath
+      override def outputDir = MavenProject.this.outputDir
+
+      override def javacOpts = MavenProject.this.javacOpts
+      override def kotlincOpts = MavenProject.this.kotlincOpts
+      // override def kotlincVers = MavenProject.this.kotlincVers
+
+      override protected def willCompile () = copyResources()
+
+    } else new ScalaCompiler(this) {
+      override def sourceDirs = MavenProject.this.sourceDirs
+      override def buildClasspath = MavenProject.this.buildClasspath
+      override def outputDir = MavenProject.this.outputDir
+
+      override def javacOpts = MavenProject.this.javacOpts
+      override def scalacOpts = MavenProject.this.scalacOpts
+      override def scalacVers = MavenProject.this.scalacVers
+
+      override protected def willCompile () = copyResources()
     }
+  }
+
+  private def copyResources () {
+    (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
   }
 
   private def javacOpts :Seq[String] = {
