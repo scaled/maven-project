@@ -115,6 +115,10 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
       override def buildClasspath = MavenProject.this.buildClasspath
       override def outputDir = MavenProject.this.outputDir
 
+      // this will be the same for main and test projects, putting them in the same module; TODO:
+      // except it doesn't work and seems to cause other problems; sigh
+      // override def moduleName = Some(pom.artifactId)
+
       override def javacOpts = MavenProject.this.javacOpts
       override def kotlincOpts = MavenProject.this.kotlincOpts
       // override def kotlincVers = MavenProject.this.kotlincVers
