@@ -121,7 +121,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
 
       override def javacOpts = MavenProject.this.javacOpts
       override def kotlincOpts = MavenProject.this.kotlincOpts
-      // override def kotlincVers = MavenProject.this.kotlincVers
+      override def kotlincVers = MavenProject.this.kotlincVers
 
       override protected def willCompile () = copyResources()
 
@@ -162,6 +162,10 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
   private def scalacVers :String = (depends collectFirst {
     case RepoId(_, "org.scala-lang", "scala-library", version) => version
   }) getOrElse ScalaCompiler.DefaultScalacVersion
+
+  private def kotlincVers :String = (depends collectFirst {
+    case RepoId(_, "org.jetbrains.kotlin", "kotlin-stdlib", version) => version
+  }) getOrElse KotlinCompiler.DefaultKotlincVersion
 
   private def copyResources (target :Path)(rsrc :POM.Resource) {
     if (rsrc.targetPath.isDefined || rsrc.filtering || !rsrc.includes.isEmpty ||
