@@ -32,18 +32,18 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override def classes = {
     val dep = _pom.toDependency()
     _pom.packaging match {
-      case "aar" => Android.jarsForAar(dep).head // TODO: return all
-      case "jar" => Maven.resolve(dep)
+      case "aar" => Android.jarsForAar(dep)
+      case "jar" => Seq(Maven.resolve(dep))
       // this is a hack, but some projects publish a POM with pom packaging even though they ship
       // jars, or bundle packaging, or god knows... I guess maybe we're not supposed to look at the
       // packaging, but rather the 'type' field of the depender, so that will require some
       // revamping... sigh
-      case _     => Maven.resolve(dep.copy(`type`="jar"))
+      case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
     }
   }
   override def depends = _depends.buildTransitive :+ _depends.platformDepend
   override def buildClasspath :Seq[Path] = _depends.buildClasspath
-  override def execClasspath :Seq[Path] = classes +: _depends.execClasspath
+  override def execClasspath :Seq[Path] = classes ++ _depends.execClasspath
 
   override def summarizeSources = {
     // if our sources don't exist, try to download them

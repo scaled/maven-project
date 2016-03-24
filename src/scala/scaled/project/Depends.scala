@@ -36,15 +36,15 @@ abstract class Depends (pspace :ProjectSpace) {
   private def mkId (dep :Dependency) = RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version)
 
   protected def classpath (scope :DependResolver.Scope) :Seq[Path] =
-    transitiveDepends(scope) map { dep => toId(dep) match {
+    transitiveDepends(scope) flatMap { dep => toId(dep) match {
       case Some(id) => pspace.projectFor(id) match {
         case Some(proj :JavaProject) => proj.classes
         case _                       => dep.systemPath match {
-          case SSome(path) => Paths.get(path)
-          case _           => Maven.resolve(dep)
+          case SSome(path) => Seq(Paths.get(path))
+          case _           => Seq(Maven.resolve(dep))
         }
       }
-      case None => Maven.resolve(dep)
+      case None => Seq(Maven.resolve(dep))
     }}
 
   private def transitiveDepends (scope :DependResolver.Scope) = {
