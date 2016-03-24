@@ -7,7 +7,7 @@ package scaled.project
 import codex.extract.{SourceSet, ZipUtils}
 import codex.model.Source
 import java.io.File
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 import java.util.zip.ZipFile
 import pomutil.POM
 import scaled._
@@ -29,7 +29,18 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
   override def name = s"${id.artifactId}:${id.version}"
   override def idName = s"mvn-${id.groupId}_${id.artifactId}_${id.version}"
   override def ids = Seq(id)
-  override def classes = af.classes
+  override def classes = {
+    val dep = _pom.toDependency()
+    _pom.packaging match {
+      case "aar" => Android.jarsForAar(dep).head // TODO: return all
+      case "jar" => Maven.resolve(dep)
+      // this is a hack, but some projects publish a POM with pom packaging even though they ship
+      // jars, or bundle packaging, or god knows... I guess maybe we're not supposed to look at the
+      // packaging, but rather the 'type' field of the depender, so that will require some
+      // revamping... sigh
+      case _     => Maven.resolve(dep.copy(`type`="jar"))
+    }
+  }
   override def depends = _depends.buildTransitive :+ _depends.platformDepend
   override def buildClasspath :Seq[Path] = _depends.buildClasspath
   override def execClasspath :Seq[Path] = classes +: _depends.execClasspath
@@ -59,7 +70,6 @@ object MavenArtifactProject {
 
   case class Artifact (repoId :RepoId) {
     lazy val pom     = resolvePOM(repoId)
-    lazy val classes = resolveClasses(repoId)
     lazy val sources = resolveSources(repoId)
   }
 

@@ -41,10 +41,10 @@ abstract class Depends (pspace :ProjectSpace) {
         case Some(proj :JavaProject) => proj.classes
         case _                       => dep.systemPath match {
           case SSome(path) => Paths.get(path)
-          case _           => Maven.resolveClasses(id)
+          case _           => Maven.resolve(dep)
         }
       }
-      case None => Maven.resolve(mkId(dep), "jar", dep.classifier)
+      case None => Maven.resolve(dep)
     }}
 
   private def transitiveDepends (scope :DependResolver.Scope) = {
