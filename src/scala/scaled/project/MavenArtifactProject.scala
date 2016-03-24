@@ -38,7 +38,7 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
     // if our sources don't exist, try to download them
     val rpath = root.path
     if (!Files.exists(rpath)) {
-      pspace.wspace.statusMsg.emit(s"Attemping to fetch sources: $rpath...")
+      pspace.wspace.statusMsg.emit(s"Attempting to fetch sources: $rpath...")
       pspace.msvc.service[MavenService].fetchSources(af.repoId)
     }
 
@@ -51,8 +51,6 @@ class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
     }
     mb.build()
   }
-
-  // TODO: try to download our -sources file if it does not already exist
 }
 
 object MavenArtifactProject {
