@@ -22,8 +22,10 @@ object Maven {
   def resolveSources (id :RepoId) :Path = resolve(id, "jar", Some("sources"))
 
   /** Resolves the local artifact for `dep`. */
-  def resolve (dep :Dependency) :Path =
-    resolve(dep.groupId, dep.artifactId, dep.version, dep.`type`, dep.classifier)
+  def resolve (dep :Dependency) :Path = dep.systemPath match {
+    case Some(path) => Paths.get(path)
+    case _          => resolve(dep.groupId, dep.artifactId, dep.version, dep.`type`, dep.classifier)
+  }
 
   /** Resolves the `.m2` `.ext` file for `id`. */
   def resolve (id :RepoId, ext :String, classifier :Option[String] = None) :Path =

@@ -36,18 +36,11 @@ abstract class Depends (pspace :ProjectSpace) {
   private def mkId (dep :Dependency) = RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version)
 
   protected def classpath (scope :DependResolver.Scope) :Seq[Path] =
-    transitiveDepends(scope) flatMap { dep => toId(dep) match {
-      case Some(id) => pspace.projectFor(id) match {
-        case Some(proj :JavaProject) => proj.classes
-        case _                       => dep.systemPath match {
-          case SSome(path) => Seq(Paths.get(path))
-          case _           => Seq(Maven.resolve(dep))
-        }
-      }
-      case None => Seq(Maven.resolve(dep))
-    }}
+    transitiveDepends(scope) flatMap { dep =>
+      classesForDep(dep) || Seq(Maven.resolve(dep))
+    }
 
-  private def transitiveDepends (scope :DependResolver.Scope) = {
+  private def transitiveDepends (scope :DependResolver.Scope) :Seq[Dependency] = {
     val dr = new DependResolver(pom) {
       // check whether this dependency is known to Scaled, and use the known version's POM instead
       // of the default POM (which comes from ~/.m2 and may be stale for snapshot depends)
@@ -60,4 +53,9 @@ abstract class Depends (pspace :ProjectSpace) {
     }
     Seq(dr.resolve(scope) :_*)
   }
+
+  // if a project has a JavaComponent use its classes directories
+  private def classesForDep (dep :Dependency) :Option[SeqV[Path]] = for {
+    id <- toId(dep) ; proj <- pspace.projectFor(id) ; java <- proj.component(classOf[JavaComponent])
+  } yield java.classes
 }

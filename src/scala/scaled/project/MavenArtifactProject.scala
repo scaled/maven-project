@@ -14,7 +14,7 @@ import scaled._
 import scaled.util.Errors
 
 class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
-    extends AbstractZipFileProject(ps, Project.Root(af.sources, false)) with JavaProject {
+    extends AbstractZipFileProject(ps, Project.Root(af.sources, false)) {
 
   private var _pom :POM = null
   private def pom = if (_pom == null) throw Errors.feedback(s"Project not ready: $root") else _pom
@@ -22,15 +22,6 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
   private val _depends = new Depends(pspace) {
     def pom = MavenArtifactProject.this.pom
   }
-
-  /** Tracks Java-specific project metadata. This should only be updated by the project, but
-    * outside parties may want to react to changes to it. */
-  val javaMetaV = metaValue("java-meta", JavaMeta)
-
-  // we can't inherit from AbstractJavaProject so we have to duplicate this code
-  override def classes = javaMetaV().classes
-  override def buildClasspath :SeqV[Path] = javaMetaV().buildClasspath
-  override def execClasspath :SeqV[Path] = javaMetaV().execClasspath
 
   override def init () {
     metaSvc.exec.runAsync(pspace.wspace) {
@@ -45,19 +36,23 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
         ids = Seq(id)
       )
 
-      javaMetaV() = javaMetaV().copy(
-        classes = {
-          val dep = pom.toDependency()
-          pom.packaging match {
-            case "aar" => Android.jarsForAar(dep)
-            case "jar" => Seq(Maven.resolve(dep))
-            // this is a hack, but some projects publish a POM with pom packaging even though they ship
-            // jars, or bundle packaging, or god knows... I guess maybe we're not supposed to look at the
-            // packaging, but rather the 'type' field of the depender, so that will require some
-            // revamping... sigh
-            case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
-          }
-        },
+      // add our JavaComponent
+      val java = new JavaComponent(this)
+      addComponent(classOf[JavaComponent], java)
+      val classes = {
+        val dep = pom.toDependency()
+        pom.packaging match {
+          case "aar" => Android.jarsForAar(dep)
+          case "jar" => Seq(Maven.resolve(dep))
+          // this is a hack, but some projects publish a POM with pom packaging even though they ship
+          // jars, or bundle packaging, or god knows... I guess maybe we're not supposed to look at the
+          // packaging, but rather the 'type' field of the depender, so that will require some
+          // revamping... sigh
+          case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
+        }
+      }
+      java.javaMetaV() = java.javaMetaV().copy(
+        classes = classes,
         buildClasspath = _depends.buildClasspath,
         execClasspath = classes ++ _depends.execClasspath
       )

@@ -10,8 +10,7 @@ import scaled._
 import scaled.pacman.Filez
 import scaled.util.{BufferBuilder, Errors}
 
-class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractJavaProject(ps, r)
-    with ScalaProject {
+class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProject(ps, r) {
   import Project._
 
   private def isMain = !root.testMode
@@ -41,49 +40,87 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractJavaProje
   // because it's low overhead; I may change my mind on this front later, hence this note
 
   override def init () {
-    metaSvc.exec.runAsync(pspace.wspace) { loadPOM } onSuccess { pom =>
-      // set up our watch on the first init
-      if (_pom == null) watchPOM(pom)
-      _pom = pom
+    metaSvc.exec.runAsync(pspace.wspace) { loadPOM } onSuccess { finishInit }
+  }
 
-      val isMain = this.isMain
-      if (isMain) {
-        val troot = Root(root.path, true)
-        testSeedV() = Some(Seed(troot, projName(false), true, getClass, List(troot)))
-      }
+  private def finishInit (pom :POM) {
+    // set up our watch on the first init
+    if (_pom == null) watchPOM(pom)
+    _pom = pom
 
-      metaV() = metaV().copy(
-        name = projName(isMain),
-        ids = {
-          val ids = Seq.builder[Id]()
-          // TODO: we could have our RepoId support a classifier and have our id be classified as
-          // tests for the test sub-project, but for now we just use artifactId-test
-          ids += RepoId(MavenRepo, pom.groupId, name, pom.version)
-          // if we have VCS URLs in our POM, make ID from those too
-          if (isMain) ids ++= {
-            def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
-            Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
-              case Array(vcs, url) => SrcURL(vcs, url)
-            }
-          }
-          ids.build()
-        },
-        sourceDirs = if (isMain) allLangs(buildDir("sourceDirectory", "src/main/java"))
-                     else allLangs(buildDir("testSourceDirectory", "src/test/java"))
-      )
-
-      val targetPre = pom.buildProps.getOrElse("directory", "target")
-      val mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
-      val classesDir = if (isMain) mainOutputDir
-                       else buildDir("testOutputDirectory", s"$targetPre/test-classes")
-      javaMetaV() = javaMetaV().copy(
-        classes = Seq(classesDir),
-        outputDir = classesDir,
-        buildClasspath = classesDir +: (if (isMain) _depends.buildClasspath
-                                        else mainOutputDir +: _depends.testClasspath),
-        execClasspath = classesDir +: _depends.execClasspath
-      )
+    val isMain = this.isMain
+    if (isMain) {
+      val troot = Root(root.path, true)
+      testSeedV() = Some(Seed(troot, projName(false), true, getClass, List(troot)))
     }
+
+    // add our Java component
+    val java = new JavaComponent(this)
+    addComponent(classOf[JavaComponent], java)
+    val targetPre = pom.buildProps.getOrElse("directory", "target")
+    val mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
+    val classesDir = if (isMain) mainOutputDir
+    else buildDir("testOutputDirectory", s"$targetPre/test-classes")
+    java.javaMetaV() = java.javaMetaV().copy(
+      classes = Seq(classesDir),
+      outputDir = classesDir,
+      buildClasspath = classesDir +: (if (isMain) _depends.buildClasspath
+                                      else mainOutputDir +: _depends.testClasspath),
+      execClasspath = classesDir +: _depends.execClasspath
+    )
+    java.addTesters()
+
+    // add dirs to our ignores
+    val igns = FileProject.stockIgnores
+    igns += FileProject.ignorePath(targetDir)
+    if (!outputDir.startsWith(targetDir)) igns += FileProject.ignorePath(outputDir)
+    ignores() = igns
+
+    // TODO: this is expensive, can we do something cheaper
+    val ssum = summarizeSources
+    // TODO: do we want to try to support multi-lingual projects? that sounds like a giant PITA,
+    // but we could probably at least generate a warning if we have some crazy mishmash of sources
+
+    // TEMP: if we have any Kotlin files, we just use the KotlinCompiler
+    if (ssum.contains("kt")) {
+      addComponent(classOf[Compiler], new KotlinCompiler(this, java) {
+        // this will be the same for main and test projects, putting them in the same module;
+        // TODO: except it doesn't work and seems to cause other problems; sigh override
+        // def moduleName = Some(pom.artifactId)
+        override def javacOpts = MavenProject.this.javacOpts
+        override def kotlincOpts = MavenProject.this.kotlincOpts
+        override def kotlincVers = MavenProject.this.kotlincVers
+        override protected def willCompile () = copyResources()
+      })
+
+    } else {
+      addComponent(classOf[Compiler], new ScalaCompiler(this, java) {
+        override def javacOpts = MavenProject.this.javacOpts
+        override def scalacOpts = MavenProject.this.scalacOpts
+        override def scalacVers = MavenProject.this.scalacVers
+        override protected def willCompile () = copyResources()
+      })
+    }
+
+    metaV() = metaV().copy(
+      name = projName(isMain),
+      ids = {
+        val ids = Seq.builder[Id]()
+        // TODO: we could have our RepoId support a classifier and have our id be classified as
+        // tests for the test sub-project, but for now we just use artifactId-test
+        ids += RepoId(MavenRepo, pom.groupId, name, pom.version)
+        // if we have VCS URLs in our POM, make ID from those too
+        if (isMain) ids ++= {
+          def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
+          Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
+            case Array(vcs, url) => SrcURL(vcs, url)
+          }
+        }
+        ids.build()
+      },
+      sourceDirs = if (isMain) allLangs(buildDir("sourceDirectory", "src/main/java"))
+      else allLangs(buildDir("testSourceDirectory", "src/test/java"))
+    )
   }
 
   override def testSeed = testSeedV()
@@ -101,15 +138,6 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractJavaProje
     deps.build()
   }
 
-  override def scalacOpts :Seq[String] = {
-    // look for info from either maven-scala or scala-maven plugins
-    val msp = pom.plugin("org.scala-tools", "maven-scala-plugin")
-    val smp = pom.plugin("net.alchim31.maven", "scala-maven-plugin")
-    // the above returns info for every POM up the chain of parents, so we flatten any config
-    // directives we find therein into one
-    (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
-  }
-
   private def allLangs (java :Path) :Seq[Path] = {
     // if the java path is not of the form foo/java then we can't langify it
     if (java.getFileName.toString != "java") Seq(java)
@@ -120,51 +148,9 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractJavaProje
 
   private def targetDir = buildDir("directory", "target")
 
-  override protected def createCompiler () = {
-    val ssum = summarizeSources
-
-    // TODO: do we want to try to support multi-lingual projects? that sounds like a giant PITA,
-    // but we could probably at least generate a warning if we have some crazy mishmash of sources
-
-    // TEMP: if we have any Kotlin files, we just use the KotlinCompiler
-    if (ssum.contains("kt")) new KotlinCompiler(this) {
-      // TODO: this is a lot of annoying duplication...
-      override def sourceDirs = MavenProject.this.sourceDirs
-      override def buildClasspath = MavenProject.this.buildClasspath
-      override def outputDir = MavenProject.this.outputDir
-
-      // this will be the same for main and test projects, putting them in the same module; TODO:
-      // except it doesn't work and seems to cause other problems; sigh
-      // override def moduleName = Some(pom.artifactId)
-
-      override def javacOpts = MavenProject.this.javacOpts
-      override def kotlincOpts = MavenProject.this.kotlincOpts
-      override def kotlincVers = MavenProject.this.kotlincVers
-
-      override protected def willCompile () = copyResources()
-
-    } else new ScalaCompiler(this) {
-      override def sourceDirs = MavenProject.this.sourceDirs
-      override def buildClasspath = MavenProject.this.buildClasspath
-      override def outputDir = MavenProject.this.outputDir
-
-      override def javacOpts = MavenProject.this.javacOpts
-      override def scalacOpts = MavenProject.this.scalacOpts
-      override def scalacVers = MavenProject.this.scalacVers
-
-      override protected def willCompile () = copyResources()
-    }
-  }
-
+  private def outputDir = component(classOf[JavaComponent]).get.outputDir
   private def copyResources () {
     (if (isMain) pom.resources else pom.testResources) foreach copyResources(outputDir)
-  }
-
-  private def kotlincOpts :Seq[String] = {
-    // this above returns info for every POM up the chain of parents, so we flatten any config
-    // directives we find therein into one
-    pom.plugin("org.jetbrains.kotlin", "kotlin-maven-plugin").
-      flatMap(_.configList("args", "arg")).fromScala
   }
 
   private def javacOpts :Seq[String] = {
@@ -175,6 +161,22 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractJavaProje
       cps.flatMap(_.configValue("target")).takeRight(1).fromScala.flatMap(List("-target", _)) ++
       // also look for <compilerArgs> sections
       cps.flatMap(_.configList("compilerArgs", "arg")).fromScala
+  }
+
+  private def scalacOpts :Seq[String] = {
+    // look for info from either maven-scala or scala-maven plugins
+    val msp = pom.plugin("org.scala-tools", "maven-scala-plugin")
+    val smp = pom.plugin("net.alchim31.maven", "scala-maven-plugin")
+    // the above returns info for every POM up the chain of parents, so we flatten any config
+    // directives we find therein into one
+    (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
+  }
+
+  private def kotlincOpts :Seq[String] = {
+    // this above returns info for every POM up the chain of parents, so we flatten any config
+    // directives we find therein into one
+    pom.plugin("org.jetbrains.kotlin", "kotlin-maven-plugin").
+      flatMap(_.configList("args", "arg")).fromScala
   }
 
   private def scalacVers :String = (depends collectFirst {
@@ -192,10 +194,6 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractJavaProje
       val rsrcDir = root.path.resolve(rsrc.directory)
       if (Files.exists(rsrcDir)) Filez.copyAll(rsrcDir, target)
     }
-  }
-
-  override protected def ignore (dir :Path) :Boolean = {
-    super.ignore(dir) || (dir == targetDir) || (dir == outputDir)
   }
 
   private val _depends = new Depends(pspace) {
