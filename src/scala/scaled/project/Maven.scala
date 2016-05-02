@@ -16,10 +16,10 @@ object Maven {
   val m2repo = Paths.get(System.getProperty("user.home"), ".m2", "repository")
 
   /** Resolves the `.pom` file for `id`. */
-  def resolvePOM (id :RepoId) = resolve(id, "pom")
+  def resolvePOM (id :RepoId) :Path = resolve(id, "pom")
 
   /** Resolves the sources `.jar` file for `id`. */
-  def resolveSources (id :RepoId) = resolve(id, "jar", Some("sources"))
+  def resolveSources (id :RepoId) :Path = resolve(id, "jar", Some("sources"))
 
   /** Resolves the local artifact for `dep`. */
   def resolve (dep :Dependency) :Path =

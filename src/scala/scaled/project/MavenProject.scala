@@ -8,53 +8,87 @@ import java.nio.file.{Files, Path}
 import pomutil.POM
 import scaled._
 import scaled.pacman.Filez
-import scaled.util.BufferBuilder
+import scaled.util.{BufferBuilder, Errors}
 
-class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJavaProject(ps)
+class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractJavaProject(ps, r)
     with ScalaProject {
   import Project._
 
   private def isMain = !root.testMode
-  private def name (isMain :Boolean) = pom.artifactId + (if (isMain) "" else "-test")
+  private def projName (isMain :Boolean) = pom.artifactId + (if (isMain) "" else "-test")
 
   private val pomFile = root.path.resolve("pom.xml")
-  private var _pom = POM.fromFile(pomFile.toFile) getOrElse {
+  private var _pom :POM = null
+  private def pom = if (_pom == null) throw Errors.feedback(s"Project not ready: $root") else _pom
+
+  private def loadPOM :POM = POM.fromFile(pomFile.toFile) getOrElse {
     throw new IllegalArgumentException(s"Unable to load $pomFile")
   }
-  def pom = _pom
+  // used to get our POM during transitive dependency resolution; this will be called on a
+  // background thread, so doing the extra processing of loading the POM immediately is OK
+  def getOrLoadPOM :POM = if (_pom == null) loadPOM else _pom
 
   // watch the POM file and any local parents for changes
-  watchPOM(pom)
   private def watchPOM (pom :POM) :Unit = {
-    def reload (unused :Path) = POM.fromFile(pomFile.toFile) match {
-      case SNone =>
-        metaSvc.log.log(s"$name: auto-reload failed: $pomFile")
-      case SSome(pom) =>
-        metaSvc.log.log(s"$name: auto-reloded: $pomFile")
-        hibernate()
-        _pom = pom
-    }
-    def watch (file :Path) = { metaSvc.service[WatchService].watchFile(file, reload) }
+    def watch (file :Path) = metaSvc.service[WatchService].watchFile(file, _ => {
+      hibernate()
+      init()
+    })
     pom.file foreach { f => watch(f.toPath) }
     pom.parent foreach { watchPOM }
   }
   // note that we don't 'close' our watches, we'll keep them active for the lifetime of the editor
   // because it's low overhead; I may change my mind on this front later, hence this note
 
-  override def name = name(isMain)
-  override def idName = s"mvn-${pom.groupId}_${name}_${pom.version}"
-  override def ids = {
-    val ids = Seq.builder[Id]()
-    // TODO: we could have our RepoId support a classifier and have our id be classified as tests
-    // for the test sub-project, but for now we just use artifactId-test
-    ids += RepoId(MavenRepo, pom.groupId, name, pom.version)
-    if (isMain) ids ++= pomSrcId
-    ids.build()
+  override def init () {
+    metaSvc.exec.runAsync(pspace.wspace) { loadPOM } onSuccess { pom =>
+      // set up our watch on the first init
+      if (_pom == null) watchPOM(pom)
+      _pom = pom
+
+      val isMain = this.isMain
+      if (isMain) {
+        val troot = Root(root.path, true)
+        testSeedV() = Some(Seed(troot, projName(false), true, getClass, List(troot)))
+      }
+
+      metaV() = metaV().copy(
+        name = projName(isMain),
+        ids = {
+          val ids = Seq.builder[Id]()
+          // TODO: we could have our RepoId support a classifier and have our id be classified as
+          // tests for the test sub-project, but for now we just use artifactId-test
+          ids += RepoId(MavenRepo, pom.groupId, name, pom.version)
+          // if we have VCS URLs in our POM, make ID from those too
+          if (isMain) ids ++= {
+            def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
+            Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
+              case Array(vcs, url) => SrcURL(vcs, url)
+            }
+          }
+          ids.build()
+        },
+        sourceDirs = if (isMain) allLangs(buildDir("sourceDirectory", "src/main/java"))
+                     else allLangs(buildDir("testSourceDirectory", "src/test/java"))
+      )
+
+      val targetPre = pom.buildProps.getOrElse("directory", "target")
+      val mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
+      val classesDir = if (isMain) mainOutputDir
+                       else buildDir("testOutputDirectory", s"$targetPre/test-classes")
+      javaMetaV() = javaMetaV().copy(
+        classes = Seq(classesDir),
+        outputDir = classesDir,
+        buildClasspath = classesDir +: (if (isMain) _depends.buildClasspath
+                                        else mainOutputDir +: _depends.testClasspath),
+        execClasspath = classesDir +: _depends.execClasspath
+      )
+    }
   }
-  override def testSeed = if (!isMain) None else {
-    val troot = Project.Root(root.path, true)
-    Some(Project.Seed(troot, name(false), true, getClass, List(troot)))
-  }
+
+  override def testSeed = testSeedV()
+  private val testSeedV = Value[Option[Seed]](None)
+
   override def depends = {
     val deps = Seq.builder[Id]
     if (isMain) deps ++= _depends.buildTransitive
@@ -76,17 +110,6 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     (if (msp.isEmpty) smp else msp).flatMap(_.configList("args", "arg")).fromScala
   }
 
-  private def pomSrcId = {
-    def stripSCM (url :String) = if (url startsWith "scm:") url.substring(4) else url
-    Option.from(pom.scm.connection) map(stripSCM(_).split(":", 2)) collect {
-      case Array(vcs, url) => SrcURL(vcs, url)
-    }
-  }
-
-  private def mainSourceDirs = allLangs(buildDir("sourceDirectory", "src/main/java"))
-  private def testSourceDirs = allLangs(buildDir("testSourceDirectory", "src/test/java"))
-  override def sourceDirs :Seq[Path] = if (isMain) mainSourceDirs else testSourceDirs
-
   private def allLangs (java :Path) :Seq[Path] = {
     // if the java path is not of the form foo/java then we can't langify it
     if (java.getFileName.toString != "java") Seq(java)
@@ -95,12 +118,7 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
       filter(Files.exists(_))
   }
 
-  private def targetPre = pom.buildProps.getOrElse("directory", "target")
   private def targetDir = buildDir("directory", "target")
-
-  private def mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
-  private def testOutputDir = buildDir("testOutputDirectory", s"$targetPre/test-classes")
-  override def outputDir :Path = if (isMain) mainOutputDir else testOutputDir
 
   override protected def createCompiler () = {
     val ssum = summarizeSources
@@ -180,12 +198,8 @@ class MavenProject (val root :Project.Root, ps :ProjectSpace) extends AbstractJa
     super.ignore(dir) || (dir == targetDir) || (dir == outputDir)
   }
 
-  override protected def buildDependClasspath =
-    if (isMain) _depends.buildClasspath else mainOutputDir +: _depends.testClasspath
-  override protected def execDependClasspath = _depends.execClasspath
-
   private val _depends = new Depends(pspace) {
-    def pom = _pom
+    def pom = MavenProject.this.pom
   }
   private def buildDir (key :String, defpath :String) :Path =
     root.path.resolve(pom.buildProps.getOrElse(key, defpath))

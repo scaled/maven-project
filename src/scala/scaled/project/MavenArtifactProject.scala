@@ -11,39 +11,62 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.zip.ZipFile
 import pomutil.POM
 import scaled._
+import scaled.util.Errors
 
-class MavenArtifactProject (af :MavenArtifactProject.Artifact, ps :ProjectSpace)
-    extends AbstractZipFileProject(ps) with JavaProject {
+class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
+    extends AbstractZipFileProject(ps, Project.Root(af.sources, false)) with JavaProject {
 
-  private def id = af.repoId
-  private val _pom = POM.fromFile(af.pom.toFile) getOrElse {
-    throw new IllegalArgumentException(s"Unable to load ${af.pom}")
-  }
+  private var _pom :POM = null
+  private def pom = if (_pom == null) throw Errors.feedback(s"Project not ready: $root") else _pom
+
   private val _depends = new Depends(pspace) {
-    def pom = _pom
+    def pom = MavenArtifactProject.this.pom
   }
 
-  override val root = Project.Root(af.sources, false)
-  override val zipPaths = Seq(af.sources)
-  override def isIncidental = true
-  override def name = s"${id.artifactId}:${id.version}"
-  override def idName = s"mvn-${id.groupId}_${id.artifactId}_${id.version}"
-  override def ids = Seq(id)
-  override def classes = {
-    val dep = _pom.toDependency()
-    _pom.packaging match {
-      case "aar" => Android.jarsForAar(dep)
-      case "jar" => Seq(Maven.resolve(dep))
-      // this is a hack, but some projects publish a POM with pom packaging even though they ship
-      // jars, or bundle packaging, or god knows... I guess maybe we're not supposed to look at the
-      // packaging, but rather the 'type' field of the depender, so that will require some
-      // revamping... sigh
-      case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
+  /** Tracks Java-specific project metadata. This should only be updated by the project, but
+    * outside parties may want to react to changes to it. */
+  val javaMetaV = metaValue("java-meta", JavaMeta)
+
+  // we can't inherit from AbstractJavaProject so we have to duplicate this code
+  override def classes = javaMetaV().classes
+  override def buildClasspath :SeqV[Path] = javaMetaV().buildClasspath
+  override def execClasspath :SeqV[Path] = javaMetaV().execClasspath
+
+  override def init () {
+    metaSvc.exec.runAsync(pspace.wspace) {
+      POM.fromFile(af.pom.toFile) getOrElse {
+        throw new IllegalArgumentException(s"Unable to load ${af.pom}")
+      }
+    } onSuccess { pom =>
+      _pom = pom
+      val id = af.repoId
+      metaV() = metaV().copy(
+        name = s"${id.artifactId}:${id.version}",
+        ids = Seq(id)
+      )
+
+      javaMetaV() = javaMetaV().copy(
+        classes = {
+          val dep = pom.toDependency()
+          pom.packaging match {
+            case "aar" => Android.jarsForAar(dep)
+            case "jar" => Seq(Maven.resolve(dep))
+            // this is a hack, but some projects publish a POM with pom packaging even though they ship
+            // jars, or bundle packaging, or god knows... I guess maybe we're not supposed to look at the
+            // packaging, but rather the 'type' field of the depender, so that will require some
+            // revamping... sigh
+            case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
+          }
+        },
+        buildClasspath = _depends.buildClasspath,
+        execClasspath = classes ++ _depends.execClasspath
+      )
     }
   }
+
+  override val zipPaths = Seq(af.sources)
+  override def isIncidental = true
   override def depends = _depends.buildTransitive :+ _depends.platformDepend
-  override def buildClasspath :Seq[Path] = _depends.buildClasspath
-  override def execClasspath :Seq[Path] = classes ++ _depends.execClasspath
 
   override def summarizeSources = {
     // if our sources don't exist, try to download them

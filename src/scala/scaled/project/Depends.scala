@@ -54,7 +54,7 @@ abstract class Depends (pspace :ProjectSpace) {
       override def localDep (dep :Dependency) =
         toId(dep).flatMap(projectPOM).toScala orElse super.localDep(dep)
       private def projectPOM (id :RepoId) = pspace.projectFor(id) match {
-        case Some(proj :MavenProject) => Some(proj.pom)
+        case Some(proj :MavenProject) => Some(proj.getOrLoadPOM)
         case _                        => None
       }
     }
