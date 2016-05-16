@@ -46,7 +46,7 @@ abstract class Depends (pspace :ProjectSpace) {
       // of the default POM (which comes from ~/.m2 and may be stale for snapshot depends)
       override def localDep (dep :Dependency) =
         toId(dep).flatMap(projectPOM).toScala orElse super.localDep(dep)
-      private def projectPOM (id :RepoId) = pspace.projectFor(id) match {
+      private def projectPOM (id :RepoId) = pspace.knownProjectFor(id) match {
         case Some(proj :MavenProject) => Some(proj.getOrLoadPOM)
         case _                        => None
       }
@@ -56,6 +56,7 @@ abstract class Depends (pspace :ProjectSpace) {
 
   // if a project has a JavaComponent use its classes directories
   private def classesForDep (dep :Dependency) :Option[SeqV[Path]] = for {
-    id <- toId(dep) ; proj <- pspace.projectFor(id) ; java <- proj.component(classOf[JavaComponent])
+    id <- toId(dep) ; proj <- pspace.knownProjectFor(id) ;
+    java <- proj.component(classOf[JavaComponent])
   } yield java.classes
 }
