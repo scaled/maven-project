@@ -23,6 +23,9 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
     def pom = MavenArtifactProject.this.pom
   }
 
+  private val java = new JavaComponent(this)
+  addComponent(classOf[JavaComponent], java)
+
   override def init () {
     metaSvc.exec.runAsync(pspace.wspace) {
       POM.fromFile(af.pom.toFile) getOrElse {
@@ -31,14 +34,8 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
     } onSuccess { pom =>
       _pom = pom
       val id = af.repoId
-      metaV() = metaV().copy(
-        name = s"${id.artifactId}:${id.version}",
-        ids = Seq(id)
-      )
 
-      // add our JavaComponent
-      val java = new JavaComponent(this)
-      addComponent(classOf[JavaComponent], java)
+      // init our Java component
       val classes = {
         val dep = pom.toDependency()
         pom.packaging match {
@@ -55,6 +52,12 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
         classes = classes,
         buildClasspath = _depends.buildClasspath,
         execClasspath = classes ++ _depends.execClasspath
+      )
+
+      // update our meta last so everything is ready for listeners who trigger on meta updates
+      metaV() = metaV().copy(
+        name = s"${id.artifactId}:${id.version}",
+        ids = Seq(id)
       )
     }
   }

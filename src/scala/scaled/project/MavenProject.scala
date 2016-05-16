@@ -20,6 +20,9 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
   private var _pom :POM = null
   private def pom = if (_pom == null) throw Errors.feedback(s"Project not ready: $root") else _pom
 
+  private val java = new JavaComponent(this)
+  addComponent(classOf[JavaComponent], java)
+
   private def loadPOM :POM = POM.fromFile(pomFile.toFile) getOrElse {
     throw new IllegalArgumentException(s"Unable to load $pomFile")
   }
@@ -54,9 +57,7 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
       testSeedV() = Some(Seed(troot, projName(false), true, getClass, List(troot)))
     }
 
-    // add our Java component
-    val java = new JavaComponent(this)
-    addComponent(classOf[JavaComponent], java)
+    // init our Java component
     val targetPre = pom.buildProps.getOrElse("directory", "target")
     val mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
     val classesDir = if (isMain) mainOutputDir
