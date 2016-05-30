@@ -42,11 +42,10 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
   // note that we don't 'close' our watches, we'll keep them active for the lifetime of the editor
   // because it's low overhead; I may change my mind on this front later, hence this note
 
-  override def init () {
-    pspace.wspace.exec.runAsync { loadPOM } onSuccess { finishInit }
-  }
+  override protected def computeMeta (oldMeta :Project.Meta) =
+    pspace.wspace.exec.runAsync { loadPOM } map { finishInit(oldMeta, _) }
 
-  private def finishInit (pom :POM) {
+  private def finishInit (oldMeta :Project.Meta, pom :POM) = {
     // set up our watch on the first init
     if (_pom == null) watchPOM(pom)
     _pom = pom
@@ -103,7 +102,7 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
       })
     }
 
-    metaV() = metaV().copy(
+    oldMeta.copy(
       name = projName(isMain),
       ids = {
         val ids = Seq.builder[Id]()
@@ -119,9 +118,13 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
         }
         ids.build()
       },
-      sourceDirs = if (isMain) allLangs(buildDir("sourceDirectory", "src/main/java"))
-      else allLangs(buildDir("testSourceDirectory", "src/test/java"))
+      sourceDirs = (if (isMain) allLangs(buildDir("sourceDirectory", "src/main/java"))
+                    else allLangs(buildDir("testSourceDirectory", "src/test/java")))
     )
+  }
+
+  override def addToBuffer (buffer :RBuffer) {
+    super.addToBuffer(buffer)
   }
 
   override def testSeed = testSeedV()

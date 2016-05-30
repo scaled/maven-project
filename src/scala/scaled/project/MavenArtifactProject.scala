@@ -26,12 +26,12 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
   private val java = new JavaComponent(this)
   addComponent(classOf[JavaComponent], java)
 
-  override def init () {
+  override def computeMeta (oldMeta :Project.Meta) = {
     pspace.wspace.exec.runAsync {
       POM.fromFile(af.pom.toFile) getOrElse {
         throw new IllegalArgumentException(s"Unable to load ${af.pom}")
       }
-    } onSuccess { pom =>
+    } map { pom =>
       _pom = pom
       val id = af.repoId
 
@@ -55,7 +55,7 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
       )
 
       // update our meta last so everything is ready for listeners who trigger on meta updates
-      metaV() = metaV().copy(
+      oldMeta.copy(
         name = s"${id.artifactId}:${id.version}",
         ids = Seq(id)
       )
