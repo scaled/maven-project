@@ -13,7 +13,7 @@ import scaled.util.{BufferBuilder, Errors}
 class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProject(ps, r) {
   import Project._
 
-  private def isMain = !root.testMode
+  private def isMain = root.module.length == 0
   private def projName (isMain :Boolean) = pom.artifactId + (if (isMain) "" else "-test")
 
   private val pomFile = root.path.resolve("pom.xml")
@@ -53,7 +53,7 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
 
     val isMain = this.isMain
     if (isMain) {
-      val troot = Root(root.path, true)
+      val troot = Root(root.path, "test")
       testSeedV() = Some(Seed(troot, projName(false), true, getClass, List(troot)))
     }
 
@@ -213,7 +213,8 @@ object MavenProject {
       val ppath = path.relativize(seed)
       // TODO: really we need to read the POM, look for testSourceDir and check whether we're
       // inside there, but jesus fuck I can't be bothered at the moment
-      Project.Root(path, ppath.exists(_.getFileName.toString == "test"))
+      if (ppath.exists(_.getFileName.toString == "test")) Project.Root(path, "test")
+      else Project.Root(path)
     }
   }
 }

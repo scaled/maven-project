@@ -14,7 +14,7 @@ import scaled._
 import scaled.util.Errors
 
 class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
-    extends AbstractZipFileProject(ps, Project.Root(af.sources, false)) {
+    extends AbstractZipFileProject(ps, Project.Root(af.sources)) {
 
   private var _pom :POM = null
   private def pom = if (_pom == null) throw Errors.feedback(s"Project not ready: $root") else _pom
@@ -103,7 +103,7 @@ object MavenArtifactProject {
     override def apply (id :Project.Id) = id match {
       case repoId @ RepoId(MavenRepo, _, _, _) =>
         val af = Artifact(repoId)
-        if (Files.exists(af.pom)) Some(seed(Root(af.sources, false), af :: Nil))
+        if (Files.exists(af.pom)) Some(seed(Root(af.sources, ""), af :: Nil))
         else None
       case _ => None
     }
