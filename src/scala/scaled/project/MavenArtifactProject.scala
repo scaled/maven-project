@@ -27,7 +27,7 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
   addComponent(classOf[JavaComponent], java)
 
   override def init () {
-    metaSvc.exec.runAsync(pspace.wspace) {
+    pspace.wspace.exec.runAsync {
       POM.fromFile(af.pom.toFile) getOrElse {
         throw new IllegalArgumentException(s"Unable to load ${af.pom}")
       }

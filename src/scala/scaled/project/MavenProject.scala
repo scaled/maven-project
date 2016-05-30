@@ -43,7 +43,7 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
   // because it's low overhead; I may change my mind on this front later, hence this note
 
   override def init () {
-    metaSvc.exec.runAsync(pspace.wspace) { loadPOM } onSuccess { finishInit }
+    pspace.wspace.exec.runAsync { loadPOM } onSuccess { finishInit }
   }
 
   private def finishInit (pom :POM) {
@@ -73,8 +73,8 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
 
     // add dirs to our ignores
     val igns = FileProject.stockIgnores
-    igns += FileProject.ignorePath(targetDir)
-    if (!outputDir.startsWith(targetDir)) igns += FileProject.ignorePath(outputDir)
+    igns += FileProject.ignorePath(targetDir, root.path)
+    if (!outputDir.startsWith(targetDir)) igns += FileProject.ignorePath(outputDir, root.path)
     ignores() = igns
 
     // TODO: this is expensive, can we do something cheaper
