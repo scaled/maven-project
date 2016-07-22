@@ -37,7 +37,10 @@ abstract class Depends (pspace :ProjectSpace) {
 
   protected def classpath (scope :DependResolver.Scope) :Seq[Path] =
     transitiveDepends(scope) flatMap { dep =>
-      classesForDep(dep) || Seq(Maven.resolve(dep))
+      javaCompClasses(dep) || dep.`type` match {
+        case "aar" => Android.jarsForAar(dep)
+        case _     => Seq(Maven.resolve(dep))
+      }
     }
 
   private def transitiveDepends (scope :DependResolver.Scope) :Seq[Dependency] = {
@@ -55,7 +58,7 @@ abstract class Depends (pspace :ProjectSpace) {
   }
 
   // if a project has a JavaComponent use its classes directories
-  private def classesForDep (dep :Dependency) :Option[SeqV[Path]] = for {
+  private def javaCompClasses (dep :Dependency) :Option[SeqV[Path]] = for {
     id <- toId(dep) ; proj <- pspace.knownProjectFor(id) ;
     java <- proj.component(classOf[JavaComponent])
   } yield java.classes

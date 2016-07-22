@@ -41,10 +41,10 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
         pom.packaging match {
           case "aar" => Android.jarsForAar(dep)
           case "jar" => Seq(Maven.resolve(dep))
-          // this is a hack, but some projects publish a POM with pom packaging even though they ship
-          // jars, or bundle packaging, or god knows... I guess maybe we're not supposed to look at the
-          // packaging, but rather the 'type' field of the depender, so that will require some
-          // revamping... sigh
+          // this is a hack, but some projects publish a POM with pom packaging even though they
+          // ship jars, or bundle packaging, or god knows... I guess maybe we're not supposed to
+          // look at the packaging, but rather the 'type' field of the depender, so that will
+          // require some revamping... sigh
           case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
         }
       }
