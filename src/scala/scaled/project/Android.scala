@@ -14,8 +14,12 @@ import pomutil.Dependency
 
 object Android {
 
-  def jarsForAar (dep :Dependency) :SeqV[Path] = {
+  def jarsForAar (dep :Dependency, onErr :Executor.ErrorHandler) :SeqV[Path] = {
     val aarPath = Maven.resolve(dep)
+    if (!Files.exists(aarPath)) {
+      onErr.emitError(new Exception(s"Missing $aarPath, cannot extract embedded jars."))
+      return Seq()
+    }
     val xdir = aarPath.getParent().resolve("extracted")
     def listJars = Seq.view(Files.list(xdir).collect(Collectors.toList[Path]))
 
