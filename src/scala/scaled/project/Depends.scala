@@ -8,6 +8,7 @@ import java.io.File
 import java.nio.file.{Path, Paths}
 import pomutil.{DependResolver, Dependency, POM}
 import scaled._
+import scaled.pacman.JDK
 
 /** A helper class for merging Maven depends with Scaled projects. */
 abstract class Depends (pspace :ProjectSpace) {
