@@ -32,10 +32,7 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
 
   // watch the POM file and any local parents for changes
   private def watchPOM (pom :POM) :Unit = {
-    def watch (file :Path) = metaSvc.service[WatchService].watchFile(file, _ => {
-      hibernate()
-      init()
-    })
+    def watch (file :Path) = metaSvc.service[WatchService].watchFile(file, _ => reinit())
     pom.file foreach { f => watch(f.toPath) }
     pom.parent foreach { watchPOM }
   }
