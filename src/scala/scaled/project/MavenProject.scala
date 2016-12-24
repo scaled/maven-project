@@ -32,12 +32,11 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
 
   // watch the POM file and any local parents for changes
   private def watchPOM (pom :POM) :Unit = {
-    def watch (file :Path) = metaSvc.service[WatchService].watchFile(file, _ => reinit())
+    val watchSvc = metaSvc.service[WatchService]
+    def watch (file :Path) = toClose += watchSvc.watchFile(file, _ => reinit())
     pom.file foreach { f => watch(f.toPath) }
     pom.parent foreach { watchPOM }
   }
-  // note that we don't 'close' our watches, we'll keep them active for the lifetime of the editor
-  // because it's low overhead; I may change my mind on this front later, hence this note
 
   override protected def computeMeta (oldMeta :Project.Meta) =
     pspace.wspace.exec.runAsync { loadPOM } map { finishInit(oldMeta, _) }
