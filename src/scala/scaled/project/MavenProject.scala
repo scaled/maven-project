@@ -98,8 +98,9 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
       })
     }
 
+    val name = projName(isMain)
     oldMeta.copy(
-      name = projName(isMain),
+      name = name,
       ids = {
         val ids = Seq.builder[Id]()
         // TODO: we could have our RepoId support a classifier and have our id be classified as
