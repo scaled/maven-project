@@ -157,9 +157,19 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
   private def javacOpts :Seq[String] = {
     // this returns 0-N Plugin instances (one for each POM in the parent chain)
     val cps  = pom.plugin("org.apache.maven.plugins", "maven-compiler-plugin")
-    // look for source/target configuration
-    cps.flatMap(_.configValue("source")).takeRight(1).fromScala.flatMap(List("-source", _)) ++
-      cps.flatMap(_.configValue("target")).takeRight(1).fromScala.flatMap(List("-target", _)) ++
+    // look for source/target configuration; if this is a test project we need to also consider
+    // 'testSource' and 'testTarget' and since these values can be defined in this or a parent POM
+    // there's some ambiguity as to which we should prefer, but we just punt and prefer 'testFoo'
+    // regardless of where it's specified and only fall back to 'foo' if no 'testFoo' is explicitly
+    // provided; yay Maven
+    def versValue(id :String) = cps.flatMap(_.configValue(id)).takeRight(1).fromScala
+    def modeVersValue(id :String) = if (isMain) versValue(id) else {
+      val testId = "test" + id.charAt(0).toUpper + id.substring(1)
+      val testValue = versValue(testId)
+      if (testValue.isEmpty) versValue(id) else testValue
+    }
+    modeVersValue("source").flatMap(List("-source", _)) ++
+      modeVersValue("target").flatMap(List("-target", _)) ++
       // also look for <compilerArgs> sections
       cps.flatMap(_.configList("compilerArgs", "arg")).fromScala
   }
