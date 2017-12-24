@@ -39,7 +39,7 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
       val classes = {
         val dep = pom.toDependency()
         pom.packaging match {
-          case "aar" => Android.jarsForAar(dep, pspace.wspace)
+          case "aar" => Android.jarsForAar(dep, pspace.wspace.emitError)
           case "jar" => Seq(Maven.resolve(dep))
           // this is a hack, but some projects publish a POM with pom packaging even though they
           // ship jars, or bundle packaging, or god knows... I guess maybe we're not supposed to

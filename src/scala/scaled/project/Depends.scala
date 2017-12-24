@@ -39,7 +39,7 @@ abstract class Depends (pspace :ProjectSpace) {
   protected def classpath (scope :DependResolver.Scope) :Seq[Path] =
     transitiveDepends(scope) flatMap { dep =>
       javaCompClasses(dep) || (dep.`type` match {
-        case "aar" => Android.jarsForAar(dep, pspace.wspace)
+        case "aar" => Android.jarsForAar(dep, pspace.wspace.emitError)
         case _     => Seq(Maven.resolve(dep))
       })
     }
