@@ -1,4 +1,4 @@
-//
+
 // Scaled Maven Project plugin - a Scaled extension for handling Maven projects
 // http://github.com/scaled/maven-project/blob/master/LICENSE
 
@@ -85,7 +85,8 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
         // def moduleName = Some(pom.artifactId)
         override def javacOpts = MavenProject.this.javacOpts
         override def kotlincOpts = MavenProject.this.kotlincOpts
-        override def kotlincVers = MavenProject.this.kotlincVers
+        override def kotlincVers = artifactVers(
+          "org.jetbrains.kotlin", "kotlin-stdlib", super.kotlincVers)
         override protected def willCompile () = copyResources()
       })
 
@@ -93,7 +94,7 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
       addComponent(classOf[Compiler], new ScalaCompiler(this, java) {
         override def javacOpts = MavenProject.this.javacOpts
         override def scalacOpts = MavenProject.this.scalacOpts
-        override def scalacVers = MavenProject.this.scalacVers
+        override def scalacVers = artifactVers("org.scala-lang", "scala-library", super.scalacVers)
         override protected def willCompile () = copyResources()
       })
     }
@@ -190,13 +191,10 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
       flatMap(_.configList("args", "arg")).fromScala
   }
 
-  private def scalacVers :String = (depends collectFirst {
-    case RepoId(_, "org.scala-lang", "scala-library", version) => version
-  }) getOrElse ScalaCompiler.DefaultScalacVersion
-
-  private def kotlincVers :String = (depends collectFirst {
-    case RepoId(_, "org.jetbrains.kotlin", "kotlin-stdlib", version) => version
-  }) getOrElse KotlinCompiler.DefaultKotlincVersion
+  private def artifactVers (groupId :String, artifactId :String, defvers :String) =
+    (depends collectFirst {
+      case RepoId(_, gid, aid, vers) if (gid == groupId && aid == artifactId) => vers
+    }) getOrElse defvers
 
   private def copyResources (target :Path)(rsrc :POM.Resource) {
     if (rsrc.targetPath.isDefined || rsrc.filtering || !rsrc.includes.isEmpty ||
