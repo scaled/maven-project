@@ -57,12 +57,12 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
     val mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
     val classesDir = if (isMain) mainOutputDir
     else buildDir("testOutputDirectory", s"$targetPre/test-classes")
-    java.javaMetaV() = java.javaMetaV().copy(
-      classes = Seq(classesDir),
-      outputDir = classesDir,
-      buildClasspath = classesDir +: (if (isMain) _depends.buildClasspath
+    java.javaMetaV() = new JavaMeta(
+      Seq(classesDir),
+      classesDir,
+      classesDir +: (if (isMain) _depends.buildClasspath
                                       else mainOutputDir +: _depends.testClasspath),
-      execClasspath = classesDir +: _depends.execClasspath
+      classesDir +: _depends.execClasspath
     )
     java.addTesters()
 

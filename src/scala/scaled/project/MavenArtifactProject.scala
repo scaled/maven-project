@@ -48,10 +48,11 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
           case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
         }
       }
-      java.javaMetaV() = java.javaMetaV().copy(
-        classes = classes,
-        buildClasspath = _depends.buildClasspath,
-        execClasspath = classes ++ _depends.execClasspath
+      java.javaMetaV() = new JavaMeta(
+        classes,
+        java.javaMetaV().outputDir,
+        _depends.buildClasspath,
+        classes ++ _depends.execClasspath
       )
 
       // update our meta last so everything is ready for listeners who trigger on meta updates
