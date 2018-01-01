@@ -6,8 +6,8 @@ descrip: Provides Maven project support for Scaled.
 license: New BSD
  depend: git:https://github.com/scaled/pacman.git
  depend: git:https://github.com/scaled/project-service.git
- depend: git:https://github.com/scaled/java-project.git
- depend: git:https://github.com/scaled/scala-project.git
- depend: git:https://github.com/scaled/kotlin-project.git
+ depend: git:https://github.com/scaled/java-mode.git
+ depend: git:https://github.com/scaled/scala-mode.git
+ depend: git:https://github.com/scaled/kotlin-mode.git
  depend: mvn:com.samskivert:pom-util:1.8
 execdep: git:https://github.com/scaled/scala-compiler.git
