@@ -14,7 +14,7 @@ import scaled._
 import scaled.util.Errors
 
 class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
-    extends AbstractZipFileProject(ps, Project.Root(af.sources)) {
+    extends Project(ps, Project.Root(af.sources)) {
 
   private var _pom :POM = null
   private def pom = if (_pom == null) throw Errors.feedback(s"Project not ready: $root") else _pom
@@ -34,6 +34,30 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
     } map { pom =>
       _pom = pom
       val id = af.repoId
+
+      // add a filer component for our zip file(s)
+      addComponent(classOf[Filer], new ZipFiler(Seq(af.sources)))
+
+      // add a sources component that groks our zip-based source files
+      addComponent(classOf[Sources], new Sources(Seq(af.sources)) {
+        override def summarize = {
+          // if our sources don't exist, try to download them
+          val rpath = root.path
+          if (!Files.exists(rpath)) {
+            pspace.wspace.statusMsg.emit(s"Attempting to fetch sources: $rpath...")
+            pspace.msvc.service[MavenService].fetchSources(af.repoId)
+          }
+
+          val mb = Map.builder[String,SourceSet]()
+          if (Files.exists(rpath)) {
+            val sources = new ZipFile(rpath.toFile)
+            ZipUtils.summarizeSources(sources) foreach { suff =>
+              mb += (suff, new SourceSet.Archive(rpath, ZipUtils.ofSuff("."+suff)))
+            }
+          }
+          mb.build()
+        }
+      })
 
       // init our Java component
       val classes = {
@@ -63,27 +87,8 @@ class MavenArtifactProject (ps :ProjectSpace, af :MavenArtifactProject.Artifact)
     }
   }
 
-  override val zipPaths = Seq(af.sources)
   override def isIncidental = true
   override def depends = _depends.buildTransitive :+ _depends.platformDepend
-
-  override def summarizeSources = {
-    // if our sources don't exist, try to download them
-    val rpath = root.path
-    if (!Files.exists(rpath)) {
-      pspace.wspace.statusMsg.emit(s"Attempting to fetch sources: $rpath...")
-      pspace.msvc.service[MavenService].fetchSources(af.repoId)
-    }
-
-    val mb = Map.builder[String,SourceSet]()
-    if (Files.exists(rpath)) {
-      val sources = new ZipFile(rpath.toFile)
-      ZipUtils.summarizeSources(sources) foreach { suff =>
-        mb += (suff, new SourceSet.Archive(rpath, ZipUtils.ofSuff("."+suff)))
-      }
-    }
-    mb.build()
-  }
 }
 
 object MavenArtifactProject {

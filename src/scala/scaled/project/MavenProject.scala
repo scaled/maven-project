@@ -10,7 +10,7 @@ import scaled._
 import scaled.pacman.Filez
 import scaled.util.{BufferBuilder, Errors}
 
-class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProject(ps, r) {
+class MavenProject (ps :ProjectSpace, r :Project.Root) extends Project(ps, r) {
   import Project._
 
   private def isMain = root.module.length == 0
@@ -52,6 +52,18 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
       testSeedV() = Some(Seed(troot, projName(false), true, getClass, List(troot)))
     }
 
+    // add a filer component with custom ignores
+    val igns = Ignorer.stockIgnores
+    igns += Ignorer.ignorePath(targetDir, root.path)
+    if (!outputDir.startsWith(targetDir)) igns += Ignorer.ignorePath(outputDir, root.path)
+    addComponent(classOf[Filer], new DirectoryFiler(root.path, exec, igns))
+
+    // add a sources component with our source directories
+    val sources = new Sources(
+      if (isMain) allLangs(buildDir("sourceDirectory", "src/main/java"))
+      else allLangs(buildDir("testSourceDirectory", "src/test/java")))
+    addComponent(classOf[Sources], sources)
+
     // init our Java component
     val targetPre = pom.buildProps.getOrElse("directory", "target")
     val mainOutputDir = buildDir("outputDirectory", s"$targetPre/classes")
@@ -66,14 +78,8 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
     )
     java.addTesters()
 
-    // add dirs to our ignores
-    val igns = FileProject.stockIgnores
-    igns += FileProject.ignorePath(targetDir, root.path)
-    if (!outputDir.startsWith(targetDir)) igns += FileProject.ignorePath(outputDir, root.path)
-    ignores() = igns
-
     // TODO: this is expensive, can we do something cheaper
-    val ssum = summarizeSources
+    val ssum = sources.summarize
     // TODO: do we want to try to support multi-lingual projects? that sounds like a giant PITA,
     // but we could probably at least generate a warning if we have some crazy mishmash of sources
 
@@ -116,13 +122,7 @@ class MavenProject (ps :ProjectSpace, r :Project.Root) extends AbstractFileProje
         }
         ids.build()
       },
-      sourceDirs = (if (isMain) allLangs(buildDir("sourceDirectory", "src/main/java"))
-                    else allLangs(buildDir("testSourceDirectory", "src/test/java")))
     )
-  }
-
-  override def addToBuffer (buffer :RBuffer) {
-    super.addToBuffer(buffer)
   }
 
   override def testSeed = testSeedV()
