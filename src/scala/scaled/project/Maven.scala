@@ -6,14 +6,24 @@ package scaled.project
 
 import java.io.File
 import java.nio.file.{Path, Paths}
-import pomutil.Dependency
+import pomutil.{Dependency, POM}
 
 /** Some shared Maven-related utilities. */
 object Maven {
   import Project._
 
+  case class Artifact (repoId :RepoId) {
+    lazy val pom     = resolvePOM(repoId)
+    lazy val sources = resolveSources(repoId)
+  }
+
   /** The user's local Maven repository. */
   val m2repo = Paths.get(System.getProperty("user.home"), ".m2", "repository")
+
+  /** Loads and returns the POM at `path`. */
+  def loadPOM (path :Path) :POM = POM.fromFile(path.toFile) getOrElse {
+    throw new IllegalArgumentException(s"Unable to load $path")
+  }
 
   /** Resolves the `.pom` file for `id`. */
   def resolvePOM (id :RepoId) :Path = resolve(id, "pom")

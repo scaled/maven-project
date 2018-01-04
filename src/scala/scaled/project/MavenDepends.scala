@@ -5,17 +5,33 @@
 package scaled.project
 
 import java.io.File
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 import pomutil.{DependResolver, Dependency, POM}
 import scaled._
 import scaled.pacman.JDK
 
-/** A helper class for merging Maven depends with Scaled projects. */
-abstract class Depends (pspace :ProjectSpace) {
+/** Converts Maven depends to Scaled projects. */
+class MavenDepends (project :Project, val pom :POM, isMain :Boolean) extends Depends(project) {
   import Project._
 
-  /** Returns the POM we use to resolve depends. */
-  def pom :POM
+  override def ids = {
+    val deps = Seq.builder[Id]
+    if (isMain) deps ++= buildTransitive
+    else {
+      // if this is the test subproject, add a depend on the main project
+      deps += RepoId(MavenRepo, pom.groupId, pom.artifactId, pom.version)
+      deps ++= testTransitive
+    }
+    deps += platformDepend
+    deps.build()
+  }
+
+  /** Returns the version of the specified artifact in our depends, or `defvers` if the specified
+    * depend does not occur in our depends. */
+  def artifactVers (groupId :String, artifactId :String, defvers :String) =
+    (ids collectFirst {
+      case RepoId(_, gid, aid, vers) if (gid == groupId && aid == artifactId) => vers
+    }) getOrElse defvers
 
   /** Resolves build (main) depends for [[pom]], using `pspace` to resolve projects known to Scaled
     * in lieu of artifacts in the local Maven repo. */
@@ -50,9 +66,9 @@ abstract class Depends (pspace :ProjectSpace) {
       // of the default POM (which comes from ~/.m2 and may be stale for snapshot depends)
       override def localDep (dep :Dependency) =
         toId(dep).flatMap(projectPOM).toScala orElse super.localDep(dep)
-      private def projectPOM (id :RepoId) = pspace.knownProjectFor(id) match {
-        case Some(proj :MavenProject) => Some(proj.getOrLoadPOM)
-        case _                        => None
+      private def projectPOM (id :RepoId) = pspace.knownProjectFor(id).map(_.depends) match {
+        case Some(md :MavenDepends) => Some(md.pom)
+        case _                      => None
       }
     }
     Seq(dr.resolve(scope) :_*)
@@ -63,4 +79,6 @@ abstract class Depends (pspace :ProjectSpace) {
     id <- toId(dep) ; proj <- pspace.knownProjectFor(id) ;
     java <- proj.component(classOf[JavaComponent])
   } yield java.classes
+
+  private def pspace = project.pspace
 }
