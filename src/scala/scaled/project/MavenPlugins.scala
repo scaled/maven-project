@@ -29,16 +29,18 @@ object MavenPlugins {
 
   @Plugin(tag="project-resolver")
   class MavenResolverPlugin extends ResolverPlugin {
+    override def metaFiles (root :Project.Root) = Seq(root.path.resolve(PomFile))
     override def addComponents (project :Project) {
       val pomFile = project.root.path.resolve(PomFile)
-      if (Files.exists(pomFile)) {
-        // TODO: reload & re-apply when POM changes
-        project.pspace.wspace.exec.runAsync(Maven.loadPOM(pomFile)).
-          onSuccess(addMavenComponents(project, _)).
-          onFailure(project.pspace.wspace.exec.handleError)
-      }
+      project.pspace.wspace.exec.runAsync(Maven.loadPOM(pomFile)).
+        onSuccess(addMavenComponents(project, _)).
+        onFailure(project.pspace.wspace.exec.handleError)
     }
   }
+
+  // TODO: we could perhaps provide a way for resolver plugins to add additional to be watched
+  // files; I'd rather not have to parse the whole POM and discover local parents in metaFiles and
+  // then do that all again, maybe we should just have a cache for POM files...
 
   // // watch the POM file and any local parents for changes
   // private def watchPOM (pom :POM) :Unit = {
