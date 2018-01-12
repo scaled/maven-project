@@ -88,6 +88,7 @@ object MavenArtifactPlugins {
     }
     java.javaMetaV() = new JavaMeta(
       classes,
+      java.javaMetaV().targetDir,
       java.javaMetaV().outputDir,
       depends.buildClasspath,
       classes ++ depends.execClasspath

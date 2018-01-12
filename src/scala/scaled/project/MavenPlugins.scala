@@ -78,6 +78,7 @@ object MavenPlugins {
     val java = new JavaComponent(project)
     java.javaMetaV() = new JavaMeta(
       Seq(classesDir),
+      targetDir,
       classesDir,
       classesDir +: (if (isMain) depends.buildClasspath
                      else mainOutputDir +: depends.testClasspath),
