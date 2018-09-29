@@ -75,15 +75,16 @@ object MavenPlugins {
     project.addComponent(classOf[Depends], depends)
 
     // add a Java component with all our classpath info
-    val java = new JavaComponent(project)
-    java.javaMetaV() = new JavaMeta(
-      Seq(classesDir),
-      targetDir,
-      classesDir,
-      classesDir +: (if (isMain) depends.buildClasspath
-                     else mainOutputDir +: depends.testClasspath),
-      classesDir +: depends.execClasspath
-    )
+    val _targetDir = targetDir
+    val java = new JavaComponent(project) {
+      override def classes = Seq(classesDir)
+      override def targetDir = _targetDir
+      override def outputDir = classesDir
+      override def buildClasspath :SeqV[Path] =
+        classesDir +: (if (isMain) depends.buildClasspath
+                       else mainOutputDir +: depends.testClasspath)
+      override def execClasspath :SeqV[Path] = classesDir +: depends.execClasspath
+    }
     project.addComponent(classOf[JavaComponent], java)
     java.addTesters()
 

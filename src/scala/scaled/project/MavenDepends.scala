@@ -53,12 +53,7 @@ class MavenDepends (project :Project, val pom :POM, isMain :Boolean) extends Dep
   private def mkId (dep :Dependency) = RepoId(MavenRepo, dep.groupId, dep.artifactId, dep.version)
 
   protected def classpath (scope :DependResolver.Scope) :Seq[Path] =
-    transitiveDepends(scope) flatMap { dep =>
-      javaCompClasses(dep) || (dep.`type` match {
-        case "aar" => Android.jarsForAar(dep, pspace.wspace.exec)
-        case _     => Seq(Maven.resolve(dep))
-      })
-    }
+    transitiveDepends(scope) flatMap dependClasses
 
   private def transitiveDepends (scope :DependResolver.Scope) :Seq[Dependency] = {
     val dr = new DependResolver(pom) {
@@ -73,6 +68,12 @@ class MavenDepends (project :Project, val pom :POM, isMain :Boolean) extends Dep
     }
     Seq(dr.resolve(scope) :_*)
   }
+
+  private def dependClasses (dep :Dependency) :SeqV[Path] =
+    javaCompClasses(dep) || (dep.`type` match {
+      case "aar" => Android.jarsForAar(dep, pspace.wspace.exec)
+      case _     => Seq(Maven.resolve(dep))
+    })
 
   // if a project has a JavaComponent use its classes directories
   private def javaCompClasses (dep :Dependency) :Option[SeqV[Path]] = for {

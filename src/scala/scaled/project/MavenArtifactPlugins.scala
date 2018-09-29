@@ -6,7 +6,7 @@ package scaled.project
 
 import codex.extract.{SourceSet, ZipUtils}
 import java.io.File
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 import java.util.zip.ZipFile
 import pomutil.POM
 import scaled._
@@ -70,29 +70,26 @@ object MavenArtifactPlugins {
     val depends = new MavenDepends(project, pom, true)
     project.addComponent(classOf[Depends], depends)
 
-    val java = new JavaComponent(project)
-    project.addComponent(classOf[JavaComponent], java)
-
-    // init our Java component
-    val classes = {
-      val dep = pom.toDependency()
-      pom.packaging match {
-        case "aar" => Android.jarsForAar(dep, project.pspace.wspace.exec)
-        case "jar" => Seq(Maven.resolve(dep))
-        // this is a hack, but some projects publish a POM with pom packaging even though they
-        // ship jars, or bundle packaging, or god knows... I guess maybe we're not supposed to
-        // look at the packaging, but rather the 'type' field of the depender, so that will
-        // require some revamping... sigh
-        case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
+    // add our Java component
+    val java = new JavaMetaComponent(project)
+    project.addComponent(classOf[JavaComponent], new JavaComponent(project) {
+      lazy val classes :SeqV[Path] = {
+        val dep = pom.toDependency()
+        pom.packaging match {
+          case "aar" => Android.jarsForAar(dep, project.pspace.wspace.exec)
+          case "jar" => Seq(Maven.resolve(dep))
+          // this is a hack, but some projects publish a POM with pom packaging even though they
+          // ship jars, or bundle packaging, or god knows... I guess maybe we're not supposed to
+          // look at the packaging, but rather the 'type' field of the depender, so that will
+          // require some revamping... sigh
+          case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
+        }
       }
-    }
-    java.javaMetaV() = new JavaMeta(
-      classes,
-      java.javaMetaV().targetDir,
-      java.javaMetaV().outputDir,
-      depends.buildClasspath,
-      classes ++ depends.execClasspath
-    )
+      override def targetDir = Paths.get("unused")
+      override def outputDir = Paths.get("unused")
+      override def buildClasspath :SeqV[Path] = depends.buildClasspath
+      override def execClasspath :SeqV[Path] = classes ++ depends.execClasspath
+    })
 
     // update our meta last so everything is ready for listeners who trigger on meta updates
     project.metaV() = Meta(s"${id.artifactId}:${id.version}", Set(id), None)
