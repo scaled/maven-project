@@ -78,11 +78,8 @@ object MavenPlugins {
     val _targetDir = targetDir
     val java = new JavaComponent(project) {
       override def classes = Seq(classesDir)
-      override def targetDir = _targetDir
-      override def outputDir = classesDir
-      override def buildClasspath :SeqV[Path] =
-        classesDir +: (if (isMain) depends.buildClasspath
-                       else mainOutputDir +: depends.testClasspath)
+      override def buildClasspath :SeqV[Path] = (if (isMain) depends.buildClasspath
+                                                 else mainOutputDir +: depends.testClasspath)
       override def execClasspath :SeqV[Path] = classesDir +: depends.execClasspath
     }
     project.addComponent(classOf[JavaComponent], java)
@@ -165,6 +162,7 @@ object MavenPlugins {
         override def kotlincOpts = readKotlincOpts
         override def kotlincVers = depends.artifactVers(
           "org.jetbrains.kotlin", "kotlin-stdlib", super.kotlincVers)
+        override def outputDir = classesDir
         override protected def willCompile () = copyResources()
       })
 
@@ -174,6 +172,8 @@ object MavenPlugins {
         override def scalacOpts = readScalacOpts
         override def scalacVers = depends.artifactVers(
           "org.scala-lang", "scala-library", super.scalacVers)
+        override def targetDir = _targetDir
+        override def outputDir = classesDir
         override protected def willCompile () = copyResources()
       })
     }

@@ -85,8 +85,6 @@ object MavenArtifactPlugins {
           case _     => Seq(Maven.resolve(dep.copy(`type`="jar")))
         }
       }
-      override def targetDir = Paths.get("unused")
-      override def outputDir = Paths.get("unused")
       override def buildClasspath :SeqV[Path] = depends.buildClasspath
       override def execClasspath :SeqV[Path] = classes ++ depends.execClasspath
     })
