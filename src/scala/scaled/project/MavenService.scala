@@ -28,6 +28,6 @@ class MavenService extends AbstractService {
   }
 
   // TODO: should we just make these non-abstract in AbstractService...
-  override def didStartup () {}
-  override def willShutdown () {}
+  override def didStartup () :Unit = {}
+  override def willShutdown () :Unit = {}
 }

@@ -30,7 +30,7 @@ object MavenPlugins {
   @Plugin(tag="project-resolver")
   class MavenResolverPlugin extends ResolverPlugin {
     override def metaFiles (root :Project.Root) = Seq(root.path.resolve(PomFile))
-    override def addComponents (project :Project) {
+    override def addComponents (project :Project) :Unit = {
       val pomFile = project.root.path.resolve(PomFile)
       project.pspace.wspace.exec.runAsync(Maven.loadPOM(pomFile)).
         onSuccess(addMavenComponents(project, _)).
@@ -50,7 +50,7 @@ object MavenPlugins {
   //   pom.parent foreach { watchPOM }
   // }
 
-  private def addMavenComponents (project :Project, pom :POM) {
+  private def addMavenComponents (project :Project, pom :POM) :Unit = {
     val rootPath = project.root.path
     val isMain = project.root.module.length == 0
     def projName (isMain :Boolean) = pom.artifactId + (if (isMain) "" else "-test")
@@ -135,7 +135,7 @@ object MavenPlugins {
         flatMap(_.configList("args", "arg")).fromScala
     }
 
-    def copyResources () {
+    def copyResources () :Unit = {
       (if (isMain) pom.resources else pom.testResources) foreach { rsrc =>
         val target = classesDir
         if (rsrc.targetPath.isDefined || rsrc.filtering || !rsrc.includes.isEmpty ||

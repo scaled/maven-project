@@ -46,7 +46,7 @@ class MavenDepends (project :Project, val pom :POM, isMain :Boolean) extends Dep
   def execClasspath = classpath(DependResolver.Runtime)
 
   // TODO: infer the desired Java version from the maven-compiler-plugin POM section?
-  def platformDepend = PlatformId(JavaPlatform, JDK.thisJDK.majorVersion)
+  def platformDepend = PlatformId(JavaPlatform, "8"/*JDK.thisJDK.majorVersion*/)
 
   // if a dependency has a classifier, don't turn it into a Scaled project
   private def toId (dep :Dependency) = if (dep.classifier.isDefined) None else Some(mkId(dep))

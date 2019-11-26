@@ -28,7 +28,7 @@ object MavenArtifactPlugins {
 
   @Plugin(tag="project-resolver")
   class MavenArtifactResolverPlugin extends ResolverPlugin {
-    override def addComponents (project :Project) {
+    override def addComponents (project :Project) :Unit = {
       val root = project.root.path
       if (isArtifact(root)) {
         val af = rootToArtifact(root)
@@ -39,7 +39,7 @@ object MavenArtifactPlugins {
     }
   }
 
-  private def addMavenComponents (project :Project, af :Artifact, pom :POM) {
+  private def addMavenComponents (project :Project, af :Artifact, pom :POM) :Unit = {
     val id = af.repoId
 
     // add a filer component for our zip file(s)
