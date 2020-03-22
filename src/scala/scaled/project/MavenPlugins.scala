@@ -154,17 +154,19 @@ object MavenPlugins {
 
     // TEMP: if we have any Kotlin files, we just use the KotlinCompiler
     if (ssum.contains("kt")) {
-      project.addComponent(classOf[Compiler], new KotlinCompiler(project, java) {
-        // this will be the same for main and test projects, putting them in the same module;
-        // TODO: except it doesn't work and seems to cause other problems; sigh override
-        // def moduleName = Some(pom.artifactId)
-        override def javacOpts = readJavacOpts
-        override def kotlincOpts = readKotlincOpts
-        override def kotlincVers = depends.artifactVers(
-          "org.jetbrains.kotlin", "kotlin-stdlib", super.kotlincVers)
-        override def outputDir = classesDir
-        override protected def willCompile () = copyResources()
-      })
+      // TEMP: waiting on https://github.com/scala/bug/issues/11584
+      // project.addComponent(classOf[Compiler], new KotlinCompiler(project, java) {
+      //   // this will be the same for main and test projects, putting them in the same module;
+      //   // TODO: except it doesn't work and seems to cause other problems; sigh override
+      //   // def moduleName = Some(pom.artifactId)
+      //   override def javacOpts = readJavacOpts
+      //   override def kotlincOpts = readKotlincOpts
+      //   override def kotlincVers = depends.artifactVers(
+      //     "org.jetbrains.kotlin", "kotlin-stdlib", super.kotlincVers)
+      //   override def outputDir = classesDir
+      //   override protected def willCompile () = copyResources()
+      // })
+      project.emitStatus("Kotlin compilation disabled pending scalac fix (issue #11584).")
 
     } else {
       project.addComponent(classOf[Compiler], new ScalaCompiler(project, java) {
